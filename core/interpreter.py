@@ -4,8 +4,8 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
                          PlotStatement, DrawStatement, MoveStatement, InkStatement,
                          PenStatement, PaperStatement, SoundStatement, LocateStatement, 
-                         ClsStatement, RawExpression, IfStatement, GosubStatement, 
-                         ReturnStatement, DimStatement, EndStatement)
+                         ClsStatement, ClgStatement, RawExpression, IfStatement, GosubStatement, 
+                         ReturnStatement, DimStatement, EndStatement, OriginStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -109,12 +109,31 @@ class Interpreter:
             for stmt in statements:
                 if isinstance(stmt, PrintStatement):
                     out = []
+                    newline = True
                     for expr in stmt.expressions:
-                        out.append(str(self.evaluate(expr)))
+                        if isinstance(expr, Literal) and expr.type == 'SEPARATOR':
+                            if expr.value == ';':
+                                newline = False
+                            elif expr.value == ',':
+                                out.append('\t')
+                                newline = False
+                        else:
+                            evaluated = self.evaluate(expr)
+                            val = str(evaluated)
+                            if isinstance(evaluated, (int, float)) and evaluated >= 0:
+                                val = " " + val
+                            out.append(val)
+                            newline = True
+                            
+                    out_str = "".join(out)
                     # Print to terminal for logging
-                    print(" ".join(out))
-                    # Print to CPC graphical screen (with a newline at the end)
-                    self.display.print_text(" ".join(out) + "\n")
+                    try:
+                        print(out_str)
+                    except UnicodeEncodeError:
+                        print(out_str.encode('ascii', 'replace').decode('ascii'))
+                        
+                    # Print to CPC graphical screen
+                    self.display.print_text(out_str + ("\n" if newline else ""))
                     
                 elif isinstance(stmt, LocateStatement):
                     col = int(self.evaluate(stmt.col))
@@ -124,6 +143,9 @@ class Interpreter:
                 elif isinstance(stmt, ClsStatement):
                     self.display.clear_graphics()
                     self.display.locate(1, 1)
+
+                elif isinstance(stmt, ClgStatement):
+                    self.display.clear_graphics()
 
                 elif isinstance(stmt, LetStatement):
                     val = self.evaluate(stmt.expr)
@@ -189,6 +211,12 @@ class Interpreter:
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
                     self.display.move(x, y)
+                    
+                elif isinstance(stmt, OriginStatement):
+                    x = int(self.evaluate(stmt.x))
+                    y = int(self.evaluate(stmt.y))
+                    self.display.origin_x = x
+                    self.display.origin_y = y
 
                 elif isinstance(stmt, InkStatement):
                     pen = int(self.evaluate(stmt.pen))

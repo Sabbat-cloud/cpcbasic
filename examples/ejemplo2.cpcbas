@@ -1,0 +1,4 @@
+1 mode 1
+10 for n=32 to 255
+20 print n;chr$(n);
+30 next n

@@ -9,13 +9,16 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 ## Features
 
 - **Lexical Tokenizer & AST Parser**: Full interpretation of Locomotive BASIC keywords, logic loops (`FOR`, `IF/THEN`), subroutines (`GOSUB`/`RETURN`), and mathematical functions.
-- **Authentic Graphics Subsystem**: Uses the Amstrad CPC palette and supports standard hardware resolutions (`MODE 0`, `MODE 1`, `MODE 2`) with proper pixel scaling.
+- **Authentic Graphics Subsystem**: Uses the standard Amstrad CPC firmware colors. Supports standard hardware resolutions (`MODE 0`, `MODE 1`, `MODE 2`) with proper pixel scaling. It implements graphical commands such as `PLOT`, `DRAW`, `MOVE`, `ORIGIN`, and `CLG`.
+- **String & Terminal Output**: Handles standard `PRINT` statements with separators (`,`, `;`), along with functions like `CHR$`.
 - **Original Pixel Font**: Integrates the original CPC464 pixel font for a 1:1 text rendering experience (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Procedural Audio (AY-3-8912)**: Accurately parses the `SOUND` command and generates procedural square waves and white noise in real-time via `numpy` and Pygame's mixer.
 - **Keyboard Interaction**: Support for non-blocking asynchronous keyboard reading (`INKEY$`).
 - **Disk (.dsk) Read Support**: On-the-fly mounting of `.dsk` files. It extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats seamlessly.
 
 *(Note: It does not support tokenized binary BASIC files or compiled Z80 machine code binaries since it is a high-level language interpreter, not a CPU emulator).*
+
+**⚠️ WARNING: This emulator is in a very early stage of development. Many features, statements, or behaviors might fail, crash, or are not yet implemented!**
 
 ## Installation
 
@@ -53,3 +56,6 @@ Check the `examples/` folder to test the capabilities:
 ## Credits & Thanks
 - Font: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)
 - DSK Processing inspired by: [muckypaws/AmstradDSKExplorer](https://github.com/muckypaws/AmstradDSKExplorer)
+
+## License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

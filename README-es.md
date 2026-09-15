@@ -9,13 +9,16 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 ## Características
 
 - **Tokenizador Léxico y Parser AST**: Interpretación completa de palabras clave de Locomotive BASIC, bucles lógicos (`FOR`, `IF/THEN`), subrutinas (`GOSUB`/`RETURN`) y funciones matemáticas.
-- **Subsistema Gráfico Auténtico**: Utiliza la paleta de colores del Amstrad CPC y soporta las resoluciones de hardware estándar (`MODE 0`, `MODE 1`, `MODE 2`) con escalado de píxeles adecuado.
+- **Subsistema Gráfico Auténtico**: Utiliza la paleta de colores de firmware estándar del Amstrad CPC y soporta resoluciones de hardware (`MODE 0`, `MODE 1`, `MODE 2`). Implementa comandos gráficos como `PLOT`, `DRAW`, `MOVE`, `ORIGIN`, y `CLG`.
+- **Cadenas y Salida de Terminal**: Maneja correctamente las instrucciones `PRINT` con separadores (`,`, `;`), además de funciones de cadena como `CHR$`.
 - **Fuente de Píxeles Original**: Integra la fuente de píxeles original del CPC464 para una experiencia de renderizado de texto 1:1 (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Audio Procedural (AY-3-8912)**: Interpreta de manera precisa el comando `SOUND` y genera ondas cuadradas y ruido blanco procedurales en tiempo real mediante `numpy` y el mixer de Pygame.
 - **Interacción con el Teclado**: Soporte para lectura asíncrona de teclado (`INKEY$`).
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios de código máquina Z80 compilados, dado que es un intérprete de lenguaje de alto nivel, no un emulador de CPU).*
+
+**⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa muy temprana de desarrollo (estado inicial). Muchas características, instrucciones o comportamientos todavía no están implementados, y muchas cosas podrían fallar.**
 
 ## Instalación
 
@@ -53,3 +56,6 @@ Revisa la carpeta `examples/` para probar las capacidades:
 ## Créditos y Agradecimientos
 - Tipografía: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)
 - Lógica de Discos inspirada por: [muckypaws/AmstradDSKExplorer](https://github.com/muckypaws/AmstradDSKExplorer)
+
+## Licencia
+Este proyecto está bajo la Licencia MIT - mira el archivo [LICENSE](LICENSE) para más detalles.

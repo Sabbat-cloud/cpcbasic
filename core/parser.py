@@ -56,6 +56,15 @@ class MoveStatement(Statement):
         self.x = x
         self.y = y
 
+class OriginStatement(Statement):
+    def __init__(self, x, y, left=None, right=None, top=None, bottom=None):
+        self.x = x
+        self.y = y
+        self.left = left
+        self.right = right
+        self.top = top
+        self.bottom = bottom
+
 class InkStatement(Statement):
     def __init__(self, pen, color1, color2=None):
         self.pen = pen
@@ -76,6 +85,9 @@ class LocateStatement(Statement):
         self.row = row
 
 class ClsStatement(Statement):
+    pass
+
+class ClgStatement(Statement):
     pass
 
 class IfStatement(Statement):
@@ -193,9 +205,16 @@ class Parser:
             if self.current_token.value == 'PRINT':
                 self.eat(KEYWORD)
                 exprs = []
-                if self.current_token.type not in (NEWLINE, EOF, SYMBOL):
-                    exprs.append(self.parse_expression())
-                    # To do: handle comma, semicolon separations
+                while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    if self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
+                        exprs.append(Literal(self.current_token.value, "SEPARATOR"))
+                        self.eat(SYMBOL)
+                    else:
+                        expr = self.parse_expression()
+                        if expr is not None:
+                            exprs.append(expr)
+                        else:
+                            break
                 return PrintStatement(exprs)
             
             elif self.current_token.value == 'GOTO':
@@ -267,8 +286,10 @@ class Parser:
                 
             elif self.current_token.value == 'NEXT':
                 self.eat(KEYWORD)
-                var_name = self.current_token.value
-                self.eat(IDENTIFIER)
+                var_name = None
+                if self.current_token.type == IDENTIFIER:
+                    var_name = self.current_token.value
+                    self.eat(IDENTIFIER)
                 return NextStatement(var_name)
                 
             elif self.current_token.value == 'PLOT':
@@ -299,6 +320,23 @@ class Parser:
                 self.eat(SYMBOL) # ,
                 y = self.parse_expression()
                 return MoveStatement(x, y)
+                
+            elif self.current_token.value == 'ORIGIN':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                left = right = top = bottom = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    left = self.parse_expression()
+                    self.eat(SYMBOL)
+                    right = self.parse_expression()
+                    self.eat(SYMBOL)
+                    top = self.parse_expression()
+                    self.eat(SYMBOL)
+                    bottom = self.parse_expression()
+                return OriginStatement(x, y, left, right, top, bottom)
                 
             elif self.current_token.value == 'INK':
                 self.eat(KEYWORD)
@@ -331,6 +369,10 @@ class Parser:
             elif self.current_token.value == 'CLS':
                 self.eat(KEYWORD)
                 return ClsStatement()
+
+            elif self.current_token.value == 'CLG':
+                self.eat(KEYWORD)
+                return ClgStatement()
 
             elif self.current_token.value == 'SOUND':
                 self.eat(KEYWORD)
@@ -369,7 +411,7 @@ class Parser:
     def parse_expression(self):
         expr_tokens = []
         while self.current_token.type not in (NEWLINE, EOF):
-            if self.current_token.type == SYMBOL and self.current_token.value in (',', ':'):
+            if self.current_token.type == SYMBOL and self.current_token.value in (',', ':', ';'):
                 break
             if self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN'):
                 break

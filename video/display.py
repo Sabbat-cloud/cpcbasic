@@ -2,15 +2,33 @@ import pygame
 import sys
 
 CPC_PALETTE = [
-    (0x04, 0x04, 0x04), (0x80, 0x80, 0x80), (0xff, 0xff, 0xff), # 0-2
-    (0x80, 0x00, 0x00), (0xff, 0x00, 0x00), (0xff, 0x80, 0x80), # 3-5
-    (0xff, 0x7f, 0x00), (0xff, 0xff, 0x80), (0xff, 0xff, 0x00), # 6-8
-    (0x80, 0x80, 0x00), (0x00, 0x80, 0x00), (0x01, 0xff, 0x00), # 9-11
-    (0x80, 0xff, 0x00), (0x80, 0xff, 0x80), (0x01, 0xff, 0x80), # 12-14
-    (0x00, 0x80, 0x80), (0x01, 0xff, 0xff), (0x80, 0xff, 0xff), # 15-17
-    (0x00, 0x80, 0xff), (0x00, 0x00, 0xff), (0x00, 0x00, 0x7f), # 18-20
-    (0x7f, 0x00, 0xff), (0x80, 0x80, 0xff), (0xff, 0x80, 0xff), # 21-23
-    (0xff, 0x00, 0xff), (0xff, 0x00, 0x80), (0x80, 0x00, 0x80)  # 24-26
+    (0x00, 0x00, 0x00), # 0: Black
+    (0x00, 0x00, 0x80), # 1: Blue
+    (0x00, 0x00, 0xFF), # 2: Bright Blue
+    (0x80, 0x00, 0x00), # 3: Red
+    (0x80, 0x00, 0x80), # 4: Magenta
+    (0x80, 0x00, 0xFF), # 5: Mauve
+    (0xFF, 0x00, 0x00), # 6: Bright Red
+    (0xFF, 0x00, 0x80), # 7: Purple
+    (0xFF, 0x00, 0xFF), # 8: Bright Magenta
+    (0x00, 0x80, 0x00), # 9: Green
+    (0x00, 0x80, 0x80), # 10: Cyan
+    (0x00, 0x80, 0xFF), # 11: Sky Blue
+    (0x80, 0x80, 0x00), # 12: Yellow
+    (0x80, 0x80, 0x80), # 13: White (Grey)
+    (0x80, 0x80, 0xFF), # 14: Pastel Blue
+    (0xFF, 0x80, 0x00), # 15: Orange
+    (0xFF, 0x80, 0x80), # 16: Pink
+    (0xFF, 0x80, 0xFF), # 17: Pastel Magenta
+    (0x00, 0xFF, 0x00), # 18: Bright Green
+    (0x00, 0xFF, 0x80), # 19: Sea Green
+    (0x00, 0xFF, 0xFF), # 20: Bright Cyan
+    (0x80, 0xFF, 0x00), # 21: Lime
+    (0x80, 0xFF, 0x80), # 22: Pastel Green
+    (0x80, 0xFF, 0xFF), # 23: Pastel Cyan
+    (0xFF, 0xFF, 0x00), # 24: Bright Yellow
+    (0xFF, 0xFF, 0x80), # 25: Pastel Yellow
+    (0xFF, 0xFF, 0xFF), # 26: Bright White
 ]
 
 class Display:
@@ -31,13 +49,16 @@ class Display:
         
         # Inks map logical pens (0-15) to hardware colors (0-26)
         self.inks = [0] * 16
-        self.inks[0] = 1 # Grey/Blue
-        self.inks[1] = 24 # Yellow
-        self.inks[2] = 20 # Cyan
-        self.inks[3] = 6  # Red
+        self.inks[0] = 1  # Background: Blue
+        self.inks[1] = 24 # Pen 1: Yellow
+        self.inks[2] = 20 # Pen 2: Bright Cyan
+        self.inks[3] = 6  # Pen 3: Bright Red
         
         self.current_pen = 1
         self.current_paper = 0
+        
+        # Initialize background color
+        self.logical_surface.fill(CPC_PALETTE[self.inks[0]])
         
         # Origin for graphics (bottom left by default: 0, 0)
         self.origin_x = 0
@@ -102,13 +123,17 @@ class Display:
                 self.text_row += 1
             else:
                 # Render character
-                char_surface = self.font.render(char, False, fg_color, bg_color)
-                char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
+                try:
+                    char_surface = self.font.render(char, False, fg_color, bg_color)
+                    char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
+                    
+                    x = (self.text_col - 1) * char_width
+                    y = (self.text_row - 1) * char_height
+                    
+                    self.logical_surface.blit(char_surface, (x, y))
+                except pygame.error:
+                    pass # Ignore zero-width characters or rendering errors
                 
-                x = (self.text_col - 1) * char_width
-                y = (self.text_row - 1) * char_height
-                
-                self.logical_surface.blit(char_surface, (x, y))
                 self.text_col += 1
                 
             if self.text_col > max_cols:

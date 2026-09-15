@@ -15,7 +15,7 @@ KEYWORDS = {
     'MODE', 'PEN', 'PAPER', 'INK', 'BORDER', 'PLOT', 'DRAW', 'MOVE', 'ORIGIN',
     'SOUND', 'ENV', 'ENT', 'CALL', 'LOAD', 'SAVE', 'RUN', 'LIST', 'NEW',
     'AND', 'OR', 'XOR', 'NOT', 'MOD', 'DEFINT', 'DEFREAL', 'DEFSTR',
-    'LOCATE', 'CLS', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
+    'LOCATE', 'CLS', 'CLG', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
     'REM'
 }
 
