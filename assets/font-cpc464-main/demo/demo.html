@@ -1,0 +1,1572 @@
+<!doctype html>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="ie=edge">
+<title>CPC 464 Glyphs Reference</title>
+<style>
+  /* Normalize */
+  html{line-height:1.15;-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%}h1{font-size:2em;margin:.67em 0}dl dl,dl ol,dl ul,ol dl,ul dl{margin:0}ol ol,ol ul,ul ol,ul ul{margin:0}hr{box-sizing:content-box;color:inherit;height:0;overflow:visible}main{display:block}pre{font-family:monospace,monospace;font-size:1em}a{background-color:transparent}abbr[title]{text-decoration:underline;text-decoration:underline dotted}b,strong{font-weight:bolder}code,kbd,samp{font-family:monospace,monospace;font-size:1em}small{font-size:80%}audio,video{display:inline-block}audio:not([controls]){display:none;height:0}img{border-style:none}svg:not(:root){overflow:hidden}table{border-color:inherit;text-indent:0}button,input,select{margin:0}button{overflow:visible;text-transform:none}[type=button],[type=reset],[type=submit],button{-webkit-appearance:button}fieldset{padding:.35em .75em .625em}input{overflow:visible}legend{box-sizing:border-box;color:inherit;display:table;max-width:100%;white-space:normal}progress{display:inline-block;vertical-align:baseline}select{text-transform:none}textarea{margin:0;overflow:auto}[type=checkbox],[type=radio]{box-sizing:border-box;padding:0}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}::-webkit-input-placeholder{color:inherit;opacity:.54}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}::-moz-focus-inner{border-style:none;padding:0}:-moz-focusring{outline:1px dotted ButtonText}:-moz-ui-invalid{box-shadow:none}details{display:block}dialog{background-color:#fff;border:solid;color:#000;display:block;height:-moz-fit-content;height:-webkit-fit-content;height:fit-content;left:0;margin:auto;padding:1em;position:absolute;right:0;width:-moz-fit-content;width:-webkit-fit-content;width:fit-content}dialog:not([open]){display:none}summary{display:list-item}canvas{display:inline-block}template{display:none}[hidden]{display:none}
+
+  /* Fonts */
+  @font-face {
+    font-family: 'CPC 464';
+    src: url('fonts/cpc464.woff2') format('woff2'),
+      url('fonts/cpc464.woff') format('woff');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
+  /* Variables */
+  :root {
+    --font: 'CPC 464';
+    --text: rgb(16, 16, 16);
+    --page: rgb(255, 255, 255);
+    --body: rgb(240, 240, 240);
+    --link: rgb(0, 128, 255);
+  }
+
+  /* Light mode */
+  @media (prefers-color-scheme: light) {
+    :root {
+      --text: rgb(16, 16, 16);
+      --page: rgb(255, 255, 255);
+      --body: rgb(240, 240, 240);
+    }
+  }
+
+  /* Dark mode */
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --text: rgb(240, 240, 240);
+      --page: rgb(0, 0, 0);
+      --body: rgb(16, 16, 16);
+    }
+  }
+
+  html {
+    height: 100%
+  }
+
+  body {
+    margin: 0;
+    background: var(--body);
+    color: var(--text);
+    font-family: sans-serif
+  }
+
+  main {
+    padding: 1%
+  }
+
+  main>* {
+    max-width: 620px;
+    margin: 1em auto
+  }
+
+  h1,
+  h2 {
+    font-size: 1.5em;
+    font-weight: 600;
+    text-align: center
+  }
+
+  a {
+    text-decoration: none;
+    color: var(--link)
+  }
+
+  a[href]:hover {
+    text-decoration: underline
+  }
+
+  #t {
+    table-layout: fixed;
+    border-collapse: collapse;
+    max-width: none;
+    font-size: 16px;
+    cursor: default
+  }
+
+  tr.b {
+    border-bottom: 1px solid #808080
+  }
+
+  td {
+    border: .9px solid #808080;
+    width: 40px;
+    height: 40px;
+    max-width: 64px;
+    text-align: center;
+    vertical-align: middle
+  }
+
+  td.c {
+    background: var(--page);
+    font: 30px var(--font), monospace;
+  }
+
+  th {
+    font: 10px sans-serif;
+    padding: 8px
+  }
+
+  footer {
+    max-width: 75rem;
+    margin: 0 auto;
+    padding: 0 1em 2em;
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .wrapper {
+    width: 100%;
+    max-width: 75rem;
+    margin: 0 auto;
+    box-sizing: border-box;
+    padding: 3rem 1.5rem 2rem;
+    background-color: var(--body);
+  }
+
+  .title {
+    margin: 1.5rem 0;
+    font-family: var(--font), monospace;
+    font-weight: 400;
+  }
+
+  .description {
+    margin-bottom: 0;
+    text-align: center;
+  }
+
+  @media print {
+    body {
+      background: 0 0;
+      padding: 0;
+      border: 0;
+      min-height: 0
+    }
+
+    body,
+    dt,
+    footer {
+      color: #000
+    }
+
+    tbody {
+      border-top: 1px solid #000
+    }
+
+    td {
+      border: .5px solid #000;
+      color: #000
+    }
+
+    th {
+      padding-left: 0
+    }
+  }
+</style>
+<style></style>
+
+<body>
+  <header class="wrapper">
+    <h1 class="title">CPC 464 Glyphs Reference</h1>
+    <p class="description">The following charts show the Unicode mappings for the glyphs included in <strong>CPC 464</strong>.</p>
+  </header>
+  <main>
+    <table id="t">
+      <tbody>
+        <tr>
+          <th>0020</th>
+          <td class="c"> </td>
+          <td class="c">!</td>
+          <td class="c">"</td>
+          <td class="c">#</td>
+          <td class="c">$</td>
+          <td class="c">%</td>
+          <td class="c">&amp;</td>
+          <td class="c">'</td>
+          <td class="c">(</td>
+          <td class="c">)</td>
+          <td class="c">*</td>
+          <td class="c">+</td>
+          <td class="c">,</td>
+          <td class="c">-</td>
+          <td class="c">.</td>
+          <td class="c">/</td>
+        </tr>
+        <tr>
+          <th>0030</th>
+          <td class="c">0</td>
+          <td class="c">1</td>
+          <td class="c">2</td>
+          <td class="c">3</td>
+          <td class="c">4</td>
+          <td class="c">5</td>
+          <td class="c">6</td>
+          <td class="c">7</td>
+          <td class="c">8</td>
+          <td class="c">9</td>
+          <td class="c">:</td>
+          <td class="c">;</td>
+          <td class="c">&lt;</td>
+          <td class="c">=</td>
+          <td class="c">&gt;</td>
+          <td class="c">?</td>
+        </tr>
+        <tr>
+          <th>0040</th>
+          <td class="c">@</td>
+          <td class="c">A</td>
+          <td class="c">B</td>
+          <td class="c">C</td>
+          <td class="c">D</td>
+          <td class="c">E</td>
+          <td class="c">F</td>
+          <td class="c">G</td>
+          <td class="c">H</td>
+          <td class="c">I</td>
+          <td class="c">J</td>
+          <td class="c">K</td>
+          <td class="c">L</td>
+          <td class="c">M</td>
+          <td class="c">N</td>
+          <td class="c">O</td>
+        </tr>
+        <tr>
+          <th>0050</th>
+          <td class="c">P</td>
+          <td class="c">Q</td>
+          <td class="c">R</td>
+          <td class="c">S</td>
+          <td class="c">T</td>
+          <td class="c">U</td>
+          <td class="c">V</td>
+          <td class="c">W</td>
+          <td class="c">X</td>
+          <td class="c">Y</td>
+          <td class="c">Z</td>
+          <td class="c">[</td>
+          <td class="c">\</td>
+          <td class="c">]</td>
+          <td class="c">^</td>
+          <td class="c">_</td>
+        </tr>
+        <tr>
+          <th>0060</th>
+          <td class="c">`</td>
+          <td class="c">a</td>
+          <td class="c">b</td>
+          <td class="c">c</td>
+          <td class="c">d</td>
+          <td class="c">e</td>
+          <td class="c">f</td>
+          <td class="c">g</td>
+          <td class="c">h</td>
+          <td class="c">i</td>
+          <td class="c">j</td>
+          <td class="c">k</td>
+          <td class="c">l</td>
+          <td class="c">m</td>
+          <td class="c">n</td>
+          <td class="c">o</td>
+        </tr>
+        <tr class="b">
+          <th>0070</th>
+          <td class="c">p</td>
+          <td class="c">q</td>
+          <td class="c">r</td>
+          <td class="c">s</td>
+          <td class="c">t</td>
+          <td class="c">u</td>
+          <td class="c">v</td>
+          <td class="c">w</td>
+          <td class="c">x</td>
+          <td class="c">y</td>
+          <td class="c">z</td>
+          <td class="c">{</td>
+          <td class="c">|</td>
+          <td class="c">}</td>
+          <td class="c">~</td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>00A0</th>
+          <td class="c">&nbsp;</td>
+          <td class="c">¡</td>
+          <td class="c">¢</td>
+          <td class="c">£</td>
+          <td class="c">¤</td>
+          <td class="c">¥</td>
+          <td class="c">¦</td>
+          <td class="c">§</td>
+          <td class="c">¨</td>
+          <td class="c">©</td>
+          <td class="c">ª</td>
+          <td class="c">«</td>
+          <td class="c">¬</td>
+          <td class="c">­</td>
+          <td class="c">®</td>
+          <td class="c">¯</td>
+        </tr>
+        <tr>
+          <th>00B0</th>
+          <td class="c">°</td>
+          <td class="c">±</td>
+          <td class="c">²</td>
+          <td class="c">³</td>
+          <td class="c">´</td>
+          <td class="c">µ</td>
+          <td class="c">¶</td>
+          <td class="c">·</td>
+          <td class="c">¸</td>
+          <td class="c">¹</td>
+          <td class="c">º</td>
+          <td class="c">»</td>
+          <td class="c">¼</td>
+          <td class="c">½</td>
+          <td class="c">¾</td>
+          <td class="c">¿</td>
+        </tr>
+        <tr>
+          <th>00C0</th>
+          <td class="c">À</td>
+          <td class="c">Á</td>
+          <td class="c">Â</td>
+          <td class="c">Ã</td>
+          <td class="c">Ä</td>
+          <td class="c">Å</td>
+          <td class="c">Æ</td>
+          <td class="c">Ç</td>
+          <td class="c">È</td>
+          <td class="c">É</td>
+          <td class="c">Ê</td>
+          <td class="c">Ë</td>
+          <td class="c">Ì</td>
+          <td class="c">Í</td>
+          <td class="c">Î</td>
+          <td class="c">Ï</td>
+        </tr>
+        <tr>
+          <th>00D0</th>
+          <td class="c">Ð</td>
+          <td class="c">Ñ</td>
+          <td class="c">Ò</td>
+          <td class="c">Ó</td>
+          <td class="c">Ô</td>
+          <td class="c">Õ</td>
+          <td class="c">Ö</td>
+          <td class="c">×</td>
+          <td class="c">Ø</td>
+          <td class="c">Ù</td>
+          <td class="c">Ú</td>
+          <td class="c">Û</td>
+          <td class="c">Ü</td>
+          <td class="c">Ý</td>
+          <td class="c">Þ</td>
+          <td class="c">ß</td>
+        </tr>
+        <tr>
+          <th>00E0</th>
+          <td class="c">à</td>
+          <td class="c">á</td>
+          <td class="c">â</td>
+          <td class="c">ã</td>
+          <td class="c">ä</td>
+          <td class="c">å</td>
+          <td class="c">æ</td>
+          <td class="c">ç</td>
+          <td class="c">è</td>
+          <td class="c">é</td>
+          <td class="c">ê</td>
+          <td class="c">ë</td>
+          <td class="c">ì</td>
+          <td class="c">í</td>
+          <td class="c">î</td>
+          <td class="c">ï</td>
+        </tr>
+        <tr class="b">
+          <th>00F0</th>
+          <td class="c">ð</td>
+          <td class="c">ñ</td>
+          <td class="c">ò</td>
+          <td class="c">ó</td>
+          <td class="c">ô</td>
+          <td class="c">õ</td>
+          <td class="c">ö</td>
+          <td class="c">÷</td>
+          <td class="c">ø</td>
+          <td class="c">ù</td>
+          <td class="c">ú</td>
+          <td class="c">û</td>
+          <td class="c">ü</td>
+          <td class="c">ý</td>
+          <td class="c">þ</td>
+          <td class="c">ÿ</td>
+        </tr>
+        <tr>
+          <th>0130</th>
+          <td></td>
+          <td class="c">ı</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>0140</th>
+          <td></td>
+          <td class="c">Ł</td>
+          <td class="c">ł</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>0150</th>
+          <td></td>
+          <td></td>
+          <td class="c">Œ</td>
+          <td class="c">œ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>0160</th>
+          <td class="c">Š</td>
+          <td class="c">š</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>0170</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">Ÿ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">Ž</td>
+          <td class="c">ž</td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>0190</th>
+          <td></td>
+          <td></td>
+          <td class="c">ƒ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>02C0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">ˆ</td>
+          <td class="c">ˇ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>02D0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">˘</td>
+          <td class="c">˙</td>
+          <td class="c">˚</td>
+          <td class="c">˛</td>
+          <td class="c">˜</td>
+          <td class="c">˝</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>0390</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">Δ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>03A0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">Σ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">Ω</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>03B0</th>
+          <td></td>
+          <td class="c">α</td>
+          <td class="c">β</td>
+          <td class="c">γ</td>
+          <td class="c">δ</td>
+          <td class="c">ε</td>
+          <td></td>
+          <td></td>
+          <td class="c">θ</td>
+          <td></td>
+          <td></td>
+          <td class="c">λ</td>
+          <td class="c">μ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>03C0</th>
+          <td class="c">π</td>
+          <td></td>
+          <td></td>
+          <td class="c">σ</td>
+          <td></td>
+          <td></td>
+          <td class="c">φ</td>
+          <td class="c">χ</td>
+          <td class="c">ψ</td>
+          <td class="c">ω</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>1E90</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">ẞ</td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2010</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">–</td>
+          <td class="c">—</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">‘</td>
+          <td class="c">’</td>
+          <td class="c">‚</td>
+          <td></td>
+          <td class="c">“</td>
+          <td class="c">”</td>
+          <td class="c">„</td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2020</th>
+          <td class="c">†</td>
+          <td class="c">‡</td>
+          <td class="c">•</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">…</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2030</th>
+          <td class="c">‰</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">‹</td>
+          <td class="c">›</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2040</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⁄</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>20A0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">₧</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">€</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2120</th>
+          <td></td>
+          <td></td>
+          <td class="c">™</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2190</th>
+          <td class="c">←</td>
+          <td class="c">↑</td>
+          <td class="c">→</td>
+          <td class="c">↓</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>21A0</th>
+          <td></td>
+          <td class="c">↡</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>21B0</th>
+          <td></td>
+          <td></td>
+          <td class="c">↲</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2200</th>
+          <td></td>
+          <td></td>
+          <td class="c">∂</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">∏</td>
+        </tr>
+        <tr>
+          <th>2210</th>
+          <td></td>
+          <td class="c">∑</td>
+          <td class="c">−</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">√</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">∞</td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2220</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">∫</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2240</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">≈</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2260</th>
+          <td class="c">≠</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">≤</td>
+          <td class="c">≥</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2290</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⊖</td>
+          <td class="c">⊗</td>
+          <td></td>
+          <td class="c">⊙</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⊟</td>
+        </tr>
+        <tr class="b">
+          <th>22A0</th>
+          <td class="c">⊠</td>
+          <td></td>
+          <td></td>
+          <td class="c">⊣</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2370</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⍻</td>
+          <td></td>
+          <td></td>
+          <td class="c">⍾</td>
+          <td class="c">⍿</td>
+        </tr>
+        <tr class="b">
+          <th>2380</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⎍</td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>23B0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⎾</td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>23C0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⏊</td>
+          <td></td>
+          <td class="c">⏌</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2420</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">␦</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2500</th>
+          <td class="c">─</td>
+          <td></td>
+          <td class="c">│</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┌</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2510</th>
+          <td class="c">┐</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">└</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┘</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">├</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2520</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┤</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┬</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2530</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┴</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">┼</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2570</th>
+          <td></td>
+          <td class="c">╱</td>
+          <td class="c">╲</td>
+          <td class="c">╳</td>
+          <td class="c">╴</td>
+          <td class="c">╵</td>
+          <td class="c">╶</td>
+          <td class="c">╷</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2580</th>
+          <td class="c">▀</td>
+          <td class="c">▁</td>
+          <td></td>
+          <td></td>
+          <td class="c">▄</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">█</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">▌</td>
+          <td></td>
+          <td></td>
+          <td class="c">▏</td>
+        </tr>
+        <tr>
+          <th>2590</th>
+          <td class="c">▐</td>
+          <td></td>
+          <td class="c">▒</td>
+          <td></td>
+          <td class="c">▔</td>
+          <td class="c">▕</td>
+          <td class="c">▖</td>
+          <td class="c">▗</td>
+          <td class="c">▘</td>
+          <td class="c">▙</td>
+          <td class="c">▚</td>
+          <td class="c">▛</td>
+          <td class="c">▜</td>
+          <td class="c">▝</td>
+          <td class="c">▞</td>
+          <td class="c">▟</td>
+        </tr>
+        <tr>
+          <th>25A0</th>
+          <td class="c">■</td>
+          <td class="c">□</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>25B0</th>
+          <td></td>
+          <td></td>
+          <td class="c">▲</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">▶</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">▼</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>25C0</th>
+          <td class="c">◀</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">◊</td>
+          <td class="c">○</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">●</td>
+        </tr>
+        <tr>
+          <th>25E0</th>
+          <td></td>
+          <td></td>
+          <td class="c">◢</td>
+          <td class="c">◣</td>
+          <td class="c">◤</td>
+          <td class="c">◥</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>25F0</th>
+          <td class="c">◰</td>
+          <td class="c">◱</td>
+          <td class="c">◲</td>
+          <td class="c">◳</td>
+          <td class="c">◴</td>
+          <td class="c">◵</td>
+          <td class="c">◶</td>
+          <td class="c">◷</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">◻</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>2630</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">☹</td>
+          <td class="c">☺</td>
+          <td></td>
+          <td class="c">☼</td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2640</th>
+          <td class="c">♀</td>
+          <td></td>
+          <td class="c">♂</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2660</th>
+          <td class="c">♠</td>
+          <td></td>
+          <td></td>
+          <td class="c">♣</td>
+          <td></td>
+          <td class="c">♥</td>
+          <td class="c">♦</td>
+          <td></td>
+          <td></td>
+          <td class="c">♩</td>
+          <td class="c">♪</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2710</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">✓</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>29D0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">⧖</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>2B60</th>
+          <td class="c">⭠</td>
+          <td class="c">⭡</td>
+          <td class="c">⭢</td>
+          <td class="c">⭣</td>
+          <td class="c">⭤</td>
+          <td class="c">⭥</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>E000</th>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>EFE0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c"></td>
+        </tr>
+        <tr class="b">
+          <th>EFF0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c"></td>
+          <td class="c"></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>FB00</th>
+          <td></td>
+          <td class="c">ﬁ</td>
+          <td class="c">ﬂ</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr class="b">
+          <th>1F5F0</th>
+          <td></td>
+          <td></td>
+          <td class="c">🗲</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>1FB80</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">🮌</td>
+          <td class="c">🮍</td>
+          <td class="c">🮎</td>
+          <td class="c">🮏</td>
+        </tr>
+        <tr>
+          <th>1FB90</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">🮕</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">🮜</td>
+          <td class="c">🮝</td>
+          <td class="c">🮞</td>
+          <td class="c">🮟</td>
+        </tr>
+        <tr class="b">
+          <th>1FBA0</th>
+          <td class="c">🮠</td>
+          <td class="c">🮡</td>
+          <td class="c">🮢</td>
+          <td class="c">🮣</td>
+          <td class="c">🮤</td>
+          <td class="c">🮥</td>
+          <td class="c">🮦</td>
+          <td class="c">🮧</td>
+          <td class="c">🮨</td>
+          <td class="c">🮩</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">🮮</td>
+          <td></td>
+        </tr>
+        <tr>
+          <th>1FBC0</th>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td class="c">🯅</td>
+          <td class="c">🯆</td>
+          <td class="c">🯇</td>
+          <td class="c">🯈</td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </main>
+  <footer>List generated with: <a href="https://torinak.com/font/lsfont.html" target="_blank">lsfont.html</a> by <a href="https://torinak.com/~jb/" rel="author" target="_blank">Jan Bobrowski</a></footer>
+</body>
+</html>

@@ -1,0 +1,393 @@
+from core.lexer import Lexer, EOF, NUMBER, HEX_NUMBER, STRING, IDENTIFIER, KEYWORD, SYMBOL, NEWLINE
+
+class ASTNode:
+    pass
+
+class Program(ASTNode):
+    def __init__(self, lines):
+        # Dictionary mapping line number (int) to a list of statements
+        self.lines = lines
+
+class Statement(ASTNode):
+    pass
+
+class PrintStatement(Statement):
+    def __init__(self, expressions):
+        self.expressions = expressions
+
+class LetStatement(Statement):
+    def __init__(self, identifier, expr):
+        self.identifier = identifier
+        self.expr = expr
+
+class GotoStatement(Statement):
+    def __init__(self, line_number):
+        self.line_number = line_number
+        
+class ModeStatement(Statement):
+    def __init__(self, mode_expr):
+        self.mode_expr = mode_expr
+        
+class ForStatement(Statement):
+    def __init__(self, identifier, start_expr, end_expr, step_expr):
+        self.identifier = identifier
+        self.start_expr = start_expr
+        self.end_expr = end_expr
+        self.step_expr = step_expr
+
+class NextStatement(Statement):
+    def __init__(self, identifier):
+        self.identifier = identifier
+
+class PlotStatement(Statement):
+    def __init__(self, x, y, pen=None):
+        self.x = x
+        self.y = y
+        self.pen = pen
+
+class DrawStatement(Statement):
+    def __init__(self, x, y, pen=None):
+        self.x = x
+        self.y = y
+        self.pen = pen
+
+class MoveStatement(Statement):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class InkStatement(Statement):
+    def __init__(self, pen, color1, color2=None):
+        self.pen = pen
+        self.color1 = color1
+        self.color2 = color2
+
+class PenStatement(Statement):
+    def __init__(self, pen):
+        self.pen = pen
+        
+class PaperStatement(Statement):
+    def __init__(self, paper):
+        self.paper = paper
+
+class LocateStatement(Statement):
+    def __init__(self, col, row):
+        self.col = col
+        self.row = row
+
+class ClsStatement(Statement):
+    pass
+
+class IfStatement(Statement):
+    def __init__(self, condition, then_stmt):
+        self.condition = condition
+        self.then_stmt = then_stmt
+
+class GosubStatement(Statement):
+    def __init__(self, line_number):
+        self.line_number = line_number
+
+class ReturnStatement(Statement):
+    pass
+
+class DimStatement(Statement):
+    def __init__(self, var_name, dims):
+        self.var_name = var_name
+        self.dims = dims
+
+class EndStatement(Statement):
+    pass
+
+class Expr(ASTNode):
+    pass
+
+class RawExpression(Expr):
+    def __init__(self, tokens):
+        self.tokens = tokens
+
+class SoundStatement(Statement):
+    def __init__(self, channel, period, duration, volume, env, ent, noise):
+        self.channel = channel
+        self.period = period
+        self.duration = duration
+        self.volume = volume
+        self.env = env
+        self.ent = ent
+        self.noise = noise
+
+class Expr(ASTNode):
+    pass
+
+class Literal(Expr):
+    def __init__(self, value, type_):
+        self.value = value
+        self.type = type_
+
+    def __repr__(self):
+        return f"Literal({self.value}, {self.type})"
+
+class Variable(Expr):
+    def __init__(self, name):
+        self.name = name
+
+class BinOp(Expr):
+    def __init__(self, left, op, right):
+        self.left = left
+        self.op = op
+        self.right = right
+
+class Parser:
+    def __init__(self, tokens):
+        self.tokens = tokens
+        self.pos = 0
+        self.current_token = self.tokens[self.pos]
+
+    def eat(self, token_type):
+        if self.current_token.type == token_type:
+            self.pos += 1
+            if self.pos < len(self.tokens):
+                self.current_token = self.tokens[self.pos]
+        else:
+            raise Exception(f"Expected {token_type}, got {self.current_token.type} at line {self.current_token.line}")
+
+    def parse(self):
+        lines = {}
+        
+        while self.current_token.type != EOF:
+            if self.current_token.type == NEWLINE:
+                self.eat(NEWLINE)
+                continue
+                
+            if self.current_token.type == NUMBER:
+                line_num = int(self.current_token.value)
+                self.eat(NUMBER)
+                
+                statements = []
+                while self.current_token.type != NEWLINE and self.current_token.type != EOF:
+                    prev_pos = self.pos
+                    stmt = self.parse_statement()
+                    if stmt:
+                        statements.append(stmt)
+                    
+                    if self.current_token.type == SYMBOL and self.current_token.value == ':':
+                        self.eat(SYMBOL) # Multiple statements on one line
+                        
+                    if self.pos == prev_pos:
+                        # Prevent infinite loop if statement is not recognized
+                        self.pos += 1
+                        if self.pos < len(self.tokens):
+                            self.current_token = self.tokens[self.pos]
+                
+                lines[line_num] = statements
+            else:
+                # Command without line number (direct mode) - skip for now or throw error
+                # For simplicity, we just eat to EOF or newline
+                while self.current_token.type != NEWLINE and self.current_token.type != EOF:
+                    self.pos += 1
+                    self.current_token = self.tokens[self.pos]
+                
+        return Program(lines)
+
+    def parse_statement(self):
+        if self.current_token.type == KEYWORD:
+            if self.current_token.value == 'PRINT':
+                self.eat(KEYWORD)
+                exprs = []
+                if self.current_token.type not in (NEWLINE, EOF, SYMBOL):
+                    exprs.append(self.parse_expression())
+                    # To do: handle comma, semicolon separations
+                return PrintStatement(exprs)
+            
+            elif self.current_token.value == 'GOTO':
+                self.eat(KEYWORD)
+                expr = self.parse_expression()
+                return GotoStatement(expr)
+
+            elif self.current_token.value == 'GOSUB':
+                self.eat(KEYWORD)
+                expr = self.parse_expression()
+                return GosubStatement(expr)
+
+            elif self.current_token.value == 'RETURN':
+                self.eat(KEYWORD)
+                return ReturnStatement()
+
+            elif self.current_token.value == 'DIM':
+                self.eat(KEYWORD)
+                var_name = self.current_token.value
+                self.eat(IDENTIFIER)
+                self.eat(SYMBOL) # (
+                dims = []
+                while True:
+                    dims.append(self.parse_expression())
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                self.eat(SYMBOL) # )
+                return DimStatement(var_name, dims)
+
+            elif self.current_token.value == 'END':
+                self.eat(KEYWORD)
+                return EndStatement()
+
+            elif self.current_token.value == 'IF':
+                self.eat(KEYWORD)
+                condition = self.parse_expression()
+                if self.current_token.type == KEYWORD and self.current_token.value == 'THEN':
+                    self.eat(KEYWORD)
+                
+                if self.current_token.type == NUMBER:
+                    line_num = self.parse_expression()
+                    then_stmt = GotoStatement(line_num)
+                else:
+                    then_stmt = self.parse_statement()
+                
+                return IfStatement(condition, then_stmt)
+                
+            elif self.current_token.value == 'MODE':
+                self.eat(KEYWORD)
+                expr = self.parse_expression()
+                return ModeStatement(expr)
+                
+            elif self.current_token.value == 'FOR':
+                self.eat(KEYWORD)
+                var_name = self.current_token.value
+                self.eat(IDENTIFIER)
+                if self.current_token.value == '=':
+                    self.eat(SYMBOL)
+                start_expr = self.parse_expression()
+                
+                if self.current_token.value == 'TO':
+                    self.eat(KEYWORD)
+                end_expr = self.parse_expression()
+                
+                # Assume step 1 for now
+                return ForStatement(var_name, start_expr, end_expr, Literal("1", NUMBER))
+                
+            elif self.current_token.value == 'NEXT':
+                self.eat(KEYWORD)
+                var_name = self.current_token.value
+                self.eat(IDENTIFIER)
+                return NextStatement(var_name)
+                
+            elif self.current_token.value == 'PLOT':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                pen = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    pen = self.parse_expression()
+                return PlotStatement(x, y, pen)
+                
+            elif self.current_token.value == 'DRAW':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                pen = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    pen = self.parse_expression()
+                return DrawStatement(x, y, pen)
+
+            elif self.current_token.value == 'MOVE':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                return MoveStatement(x, y)
+                
+            elif self.current_token.value == 'INK':
+                self.eat(KEYWORD)
+                pen = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                color1 = self.parse_expression()
+                color2 = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    color2 = self.parse_expression()
+                return InkStatement(pen, color1, color2)
+
+            elif self.current_token.value == 'PEN':
+                self.eat(KEYWORD)
+                pen = self.parse_expression()
+                return PenStatement(pen)
+
+            elif self.current_token.value == 'PAPER':
+                self.eat(KEYWORD)
+                paper = self.parse_expression()
+                return PaperStatement(paper)
+
+            elif self.current_token.value == 'LOCATE':
+                self.eat(KEYWORD)
+                col = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                row = self.parse_expression()
+                return LocateStatement(col, row)
+
+            elif self.current_token.value == 'CLS':
+                self.eat(KEYWORD)
+                return ClsStatement()
+
+            elif self.current_token.value == 'SOUND':
+                self.eat(KEYWORD)
+                args = []
+                args.append(self.parse_expression()) # channel
+                for i in range(6): # remaining up to 6 args
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        args.append(self.parse_expression())
+                    else:
+                        break
+                
+                # Fill missing args with 0 (default)
+                while len(args) < 7:
+                    args.append(Literal("0", NUMBER))
+                    
+                return SoundStatement(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+                
+            else:
+                # skip unknown statement
+                while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    self.pos += 1
+                    self.current_token = self.tokens[self.pos]
+                return None
+                
+        elif self.current_token.type == IDENTIFIER:
+            var_name = self.current_token.value
+            self.eat(IDENTIFIER)
+            if self.current_token.value == '=':
+                self.eat(SYMBOL)
+                expr = self.parse_expression()
+                return LetStatement(var_name, expr)
+                
+        return None
+
+    def parse_expression(self):
+        expr_tokens = []
+        while self.current_token.type not in (NEWLINE, EOF):
+            if self.current_token.type == SYMBOL and self.current_token.value in (',', ':'):
+                break
+            if self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN'):
+                break
+            
+            # String literals are kept as Literal nodes directly to simplify
+            if self.current_token.type == STRING and not expr_tokens:
+                val = self.current_token.value
+                self.eat(STRING)
+                return Literal(val, STRING)
+                
+            expr_tokens.append(self.current_token)
+            
+            # Use pos trick to eat current token without explicit type check if it's symbol
+            self.pos += 1
+            if self.pos < len(self.tokens):
+                self.current_token = self.tokens[self.pos]
+            
+        if not expr_tokens:
+            return None
+            
+        return RawExpression(expr_tokens)

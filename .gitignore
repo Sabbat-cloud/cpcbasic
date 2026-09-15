@@ -1,0 +1,18 @@
+# Environments
+venv/
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specifics
+assets/AmstradDSKExplorer-master/
+dsk_explorer.zip
+font.zip
