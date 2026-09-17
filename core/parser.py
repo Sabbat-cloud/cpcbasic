@@ -59,6 +59,43 @@ class OnStatement(Statement):
         self.is_gosub = is_gosub
         self.line_numbers = line_numbers
 
+class AfterStatement(Statement):
+    def __init__(self, delay, timer_id, line_number):
+        self.delay = delay
+        self.timer_id = timer_id
+        self.line_number = line_number
+
+class EveryStatement(Statement):
+    def __init__(self, delay, timer_id, line_number):
+        self.delay = delay
+        self.timer_id = timer_id
+        self.line_number = line_number
+
+class OnBreakStatement(Statement):
+    def __init__(self, action, line_number=None):
+        self.action = action # 'CONT', 'STOP', 'GOSUB'
+        self.line_number = line_number
+
+class MaskStatement(Statement):
+    def __init__(self, mask, first_point=None):
+        self.mask = mask
+        self.first_point = first_point
+
+class TagStatement(Statement):
+    pass
+
+class TagoffStatement(Statement):
+    pass
+
+class ZoneStatement(Statement):
+    def __init__(self, width):
+        self.width = width
+
+class SpeedStatement(Statement):
+    def __init__(self, type_, params):
+        self.type = type_ # 'INK' or 'KEY'
+        self.params = params
+
 class PrintStatement(Statement):
     def __init__(self, expressions):
         self.expressions = expressions
@@ -423,8 +460,35 @@ class Parser:
                 self.eat(KEYWORD)
                 return WendStatement()
 
+            elif self.current_token.value in ('AFTER', 'EVERY'):
+                is_after = self.current_token.value == 'AFTER'
+                self.eat(KEYWORD)
+                delay = self.parse_expression()
+                timer_id = Literal("0", NUMBER)
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    timer_id = self.parse_expression()
+                # next token should be GOSUB, but if it's multiple statements maybe not?
+                # The manual says AFTER <delay>[, <timer_id>] GOSUB <line>
+                if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
+                    self.eat(KEYWORD)
+                line_number = self.parse_expression()
+                if is_after:
+                    return AfterStatement(delay, timer_id, line_number)
+                else:
+                    return EveryStatement(delay, timer_id, line_number)
+
             elif self.current_token.value == 'ON':
                 self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'BREAK':
+                    self.eat(KEYWORD)
+                    action = self.current_token.value # CONT, STOP, GOSUB
+                    self.eat(KEYWORD)
+                    line_number = None
+                    if action == 'GOSUB':
+                        line_number = self.parse_expression()
+                    return OnBreakStatement(action, line_number)
+                    
                 expr = self.parse_expression()
                 is_gosub = False
                 if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
@@ -440,6 +504,47 @@ class Parser:
                     else:
                         break
                 return OnStatement(expr, is_gosub, line_numbers)
+
+            elif self.current_token.value == 'MASK':
+                self.eat(KEYWORD)
+                mask = self.parse_expression()
+                first_point = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    first_point = self.parse_expression()
+                return MaskStatement(mask, first_point)
+
+            elif self.current_token.value == 'TAG':
+                self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression()
+                return TagStatement()
+
+            elif self.current_token.value == 'TAGOFF':
+                self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression()
+                return TagoffStatement()
+
+            elif self.current_token.value == 'ZONE':
+                self.eat(KEYWORD)
+                width = self.parse_expression()
+                return ZoneStatement(width)
+
+            elif self.current_token.value == 'SPEED':
+                self.eat(KEYWORD)
+                type_ = self.current_token.value # INK or KEY
+                self.eat(KEYWORD)
+                params = []
+                while True:
+                    params.append(self.parse_expression())
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return SpeedStatement(type_, params)
                 
             elif self.current_token.value == 'MODE':
                 self.eat(KEYWORD)
