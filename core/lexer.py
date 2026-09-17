@@ -12,11 +12,12 @@ NEWLINE = 'NEWLINE'
 KEYWORDS = {
     'PRINT', 'GOTO', 'GOSUB', 'RETURN', 'IF', 'THEN', 'ELSE',
     'FOR', 'TO', 'STEP', 'NEXT', 'WHILE', 'WEND', 'DIM', 'LET',
-    'MODE', 'PEN', 'PAPER', 'INK', 'BORDER', 'PLOT', 'DRAW', 'MOVE', 'ORIGIN',
+    'MODE', 'PEN', 'PAPER', 'INK', 'BORDER', 'PLOT', 'DRAW', 'DRAWR', 'MOVE', 'MOVER', 'ORIGIN',
     'SOUND', 'ENV', 'ENT', 'CALL', 'LOAD', 'SAVE', 'RUN', 'LIST', 'NEW',
     'AND', 'OR', 'XOR', 'NOT', 'MOD', 'DEFINT', 'DEFREAL', 'DEFSTR',
     'LOCATE', 'CLS', 'CLG', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
-    'REM'
+    'REM', 'INPUT', 'SYMBOL', 'FRAME', 'MASK', 'ZONE', 'WINDOW', 'TRON', 'TROFF', 'TAG', 'TAGOFF',
+    'ON', 'LEN'
 }
 
 token_specification = [

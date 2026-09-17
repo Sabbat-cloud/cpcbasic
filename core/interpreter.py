@@ -2,16 +2,20 @@ import math
 import random
 from core.parser import (Program, PrintStatement, LetStatement, GotoStatement, 
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
-                         PlotStatement, DrawStatement, MoveStatement, InkStatement,
+                         PlotStatement, DrawStatement, DrawrStatement, MoveStatement, MoverStatement, InkStatement,
                          PenStatement, PaperStatement, SoundStatement, LocateStatement, 
                          ClsStatement, ClgStatement, RawExpression, IfStatement, GosubStatement, 
-                         ReturnStatement, DimStatement, EndStatement, OriginStatement)
+                         ReturnStatement, DimStatement, EndStatement, OriginStatement,
+                         DataStatement, ReadStatement, RestoreStatement,
+                         InputStatement, SymbolStatement, FrameStatement,
+                         StopStatement, WindowStatement, WhileStatement, WendStatement,
+                         OnStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
 def cpc_chr(x): return chr(int(x))
 def cpc_asc(x): return ord(x[0]) if x else 0
-def cpc_rnd(): return random.random()
+def cpc_rnd(x=None): return random.random()
 
 class Interpreter:
     def __init__(self, program, scale=2):
@@ -26,6 +30,8 @@ class Interpreter:
         self.line_numbers = sorted(list(self.program.lines.keys()))
         self.for_loops = {}
         self.gosub_stack = []
+        self.data_values = []
+        self.data_ptr = 0
         
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
@@ -40,7 +46,14 @@ class Interpreter:
             "ASC": cpc_asc,
             "SQR": math.sqrt,
             "LOG": math.log,
-            "LOG10": math.log10
+            "LOG10": math.log10,
+            "VAL": lambda x: float(x) if '.' in str(x) else int(x) if str(x).lstrip('-').isdigit() else 0,
+            "RIGHT_STR": lambda s, n: s[-n:] if n > 0 else "",
+            "MID_STR": lambda s, start, n=None: s[start-1:start-1+n] if n is not None else s[start-1:],
+            "LOWER_STR": lambda s: s.lower(),
+            "MAX": max,
+            "SQ": lambda x: 0,  # stub for sound queue status
+            "LEN": len
         }
         
     def get_next_line(self, current_line):
@@ -94,10 +107,18 @@ class Interpreter:
                 
         return 0
 
+    def collect_data(self):
+        for line_num in self.line_numbers:
+            for stmt in self.program.lines[line_num]:
+                if isinstance(stmt, DataStatement):
+                    for val in stmt.values:
+                        self.data_values.append((line_num, val))
+
     def execute(self):
         if not self.line_numbers:
             return
             
+        self.collect_data()
         self.pc = self.line_numbers[0]
         self.running = True
         
@@ -156,8 +177,56 @@ class Interpreter:
                     # CPC Basic supports multi-dimensional arrays, we'll store them flattened or dict-keyed
                     self.arrays[stmt.var_name] = {}
                     
+                elif isinstance(stmt, WhileStatement):
+                    cond = self.evaluate(stmt.condition)
+                    if cond:
+                        if not hasattr(self, 'while_stack'):
+                            self.while_stack = []
+                        self.while_stack.append(self.pc)
+                    else:
+                        depth = 1
+                        found = False
+                        idx = self.line_numbers.index(self.pc)
+                        started = False
+                        while idx < len(self.line_numbers):
+                            line = self.line_numbers[idx]
+                            for s in self.program.lines[line]:
+                                if s is stmt:
+                                    started = True
+                                    continue
+                                if not started: continue
+                                if isinstance(s, WhileStatement): depth += 1
+                                elif isinstance(s, WendStatement):
+                                    depth -= 1
+                                    if depth == 0:
+                                        next_pc = self.get_next_line(line)
+                                        found = True
+                                        break
+                            if found: break
+                            idx += 1
+
+                elif isinstance(stmt, WendStatement):
+                    if hasattr(self, 'while_stack') and self.while_stack:
+                        loop_pc = self.while_stack.pop()
+                        next_pc = loop_pc
+                        break
+
+                elif isinstance(stmt, OnStatement):
+                    val = int(self.evaluate(stmt.expr))
+                    if 1 <= val <= len(stmt.line_numbers):
+                        target = int(self.evaluate(stmt.line_numbers[val - 1]))
+                        if target in self.program.lines:
+                            if stmt.is_gosub:
+                                self.gosub_stack.append(next_pc)
+                            next_pc = target
+                            break
+                        else:
+                            print(f"Line {target} does not exist!")
+                            self.running = False
+                            break
+
                 elif isinstance(stmt, GotoStatement):
-                    target = self.evaluate(stmt.line_number)
+                    target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:
                         next_pc = target
                         break
@@ -167,7 +236,7 @@ class Interpreter:
                         break
                         
                 elif isinstance(stmt, GosubStatement):
-                    target = self.evaluate(stmt.line_number)
+                    target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:
                         self.gosub_stack.append(next_pc)
                         next_pc = target
@@ -207,10 +276,26 @@ class Interpreter:
                     pen = int(self.evaluate(stmt.pen)) if stmt.pen else None
                     self.display.draw(x, y, pen)
 
+                elif isinstance(stmt, DrawrStatement):
+                    x = int(self.evaluate(stmt.x))
+                    y = int(self.evaluate(stmt.y))
+                    pen = int(self.evaluate(stmt.pen)) if stmt.pen else None
+                    # DRAWR logic: relative to current position
+                    curr_x = getattr(self.display, 'graphics_x', 0)
+                    curr_y = getattr(self.display, 'graphics_y', 0)
+                    self.display.draw(curr_x + x, curr_y + y, pen)
+
                 elif isinstance(stmt, MoveStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
                     self.display.move(x, y)
+
+                elif isinstance(stmt, MoverStatement):
+                    x = int(self.evaluate(stmt.x))
+                    y = int(self.evaluate(stmt.y))
+                    curr_x = getattr(self.display, 'graphics_x', 0)
+                    curr_y = getattr(self.display, 'graphics_y', 0)
+                    self.display.move(curr_x + x, curr_y + y)
                     
                 elif isinstance(stmt, OriginStatement):
                     x = int(self.evaluate(stmt.x))
@@ -266,6 +351,69 @@ class Interpreter:
                     self.variables[stmt.identifier] = start_val
                     self.for_loops[stmt.identifier] = (next_pc, end_val, step_val)
                     
+                elif isinstance(stmt, ReadStatement):
+                    for var in stmt.variables:
+                        if self.data_ptr < len(self.data_values):
+                            _, val_expr = self.data_values[self.data_ptr]
+                            val = self.evaluate(val_expr)
+                            self.variables[var] = val
+                            self.data_ptr += 1
+                        else:
+                            print(f"DATA exhausted at {self.pc}")
+                            self.running = False
+                            break
+
+                elif isinstance(stmt, RestoreStatement):
+                    if stmt.line_number is not None:
+                        target_line = int(self.evaluate(stmt.line_number))
+                        found = False
+                        for i, (ln, _) in enumerate(self.data_values):
+                            if ln >= target_line:
+                                self.data_ptr = i
+                                found = True
+                                break
+                        if not found:
+                            self.data_ptr = len(self.data_values)
+                    else:
+                        self.data_ptr = 0
+
+                elif isinstance(stmt, StopStatement):
+                    print("STOP at line", self.pc)
+                    self.running = False
+                    break
+
+                elif isinstance(stmt, InputStatement):
+                    if stmt.prompt:
+                        self.display.print_text(stmt.prompt)
+                        self.display.update()
+                    # We use the new pygame input method
+                    val = self.display.input_string()
+                    print(f"[INPUT] user entered: {val}")
+                    if stmt.variables:
+                        var = stmt.variables[0]
+                        if not var.endswith('$'):
+                            try:
+                                val = float(val) if '.' in val else int(val)
+                            except ValueError:
+                                val = 0
+                        self.variables[var] = val
+
+                elif isinstance(stmt, FrameStatement):
+                    import pygame
+                    pygame.time.wait(20)
+
+                elif isinstance(stmt, SymbolStatement):
+                    char_code = self.evaluate(stmt.char_code)
+                    matrix = [self.evaluate(m) for m in stmt.matrix]
+                    print(f"SYMBOL {char_code} defined with matrix {matrix}")
+
+                elif isinstance(stmt, WindowStatement):
+                    left = self.evaluate(stmt.left)
+                    right = self.evaluate(stmt.right)
+                    top = self.evaluate(stmt.top)
+                    bottom = self.evaluate(stmt.bottom)
+                    print(f"WINDOW defined: {left},{right},{top},{bottom}")
+                        
                 elif isinstance(stmt, NextStatement):
                     if stmt.identifier in self.for_loops:
                         loop_target, end_val, step_val = self.for_loops[stmt.identifier]

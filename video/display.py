@@ -207,3 +207,35 @@ class Display:
             elif event.type == pygame.KEYDOWN:
                 if event.unicode:
                     self.key_buffer.append(event.unicode)
+
+    def input_string(self):
+        input_str = ""
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit(0)
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_RETURN:
+                        self.print_text('\n')
+                        self.update()
+                        return input_str
+                    elif event.key == pygame.K_BACKSPACE:
+                        if len(input_str) > 0:
+                            input_str = input_str[:-1]
+                            self.text_col -= 1
+                            if self.text_col < 1:
+                                self.text_col = self.get_max_cols()
+                                self.text_row -= 1
+                            self.print_text(' ')
+                            self.text_col -= 1
+                            if self.text_col < 1:
+                                self.text_col = self.get_max_cols()
+                                self.text_row -= 1
+                            self.update()
+                    elif event.unicode and ord(event.unicode) >= 32:
+                        input_str += event.unicode
+                        self.print_text(event.unicode)
+                        self.update()
+            pygame.time.wait(10)
+

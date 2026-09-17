@@ -1,0 +1,32 @@
+10 MODE 1
+20 PAPER 0
+30 INK 1, 24
+40 PEN 1
+50 CLS
+60 PRINT "--- PRUEBA DEL EMULADOR ---"
+70 PRINT "1. Saludar (INPUT)"
+80 PRINT "2. Deletrear (MID$ y FOR)"
+90 PRINT "3. Adivinar numero (WHILE)"
+100 PRINT "4. Salir"
+110 INPUT "Elige una opcion (1-4): ", op
+120 ON op GOTO 200, 300, 400, 600
+130 PRINT "Opcion incorrecta"
+140 GOTO 60
+200 INPUT "Como te llamas? ", n$
+210 PRINT "Hola, "; n$
+220 GOTO 60
+300 INPUT "Escribe una palabra: ", p$
+310 FOR I = 1 TO LEN(p$)
+320 PRINT "Letra "; I; ": "; MID$(p$, I, 1)
+330 NEXT I
+340 GOTO 60
+400 sec = INT(RND(1)*10)+1
+410 PRINT "Adivina un numero del 1 al 10!"
+420 intento = 0
+430 WHILE intento <> sec
+440 INPUT "Cual es tu intento? ", intento
+450 WEND
+460 PRINT "Correcto! Era el "; sec
+470 GOTO 60
+600 PRINT "Adios!"
+610 STOP

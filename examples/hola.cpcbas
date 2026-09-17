@@ -1,5 +1,5 @@
 10 REM Mi primer programa en Amstrad BASIC
-20 MODE 0
+20 MODE 1
 30 INK 0, 1
 40 INK 1, 24
 50 INK 2, 6

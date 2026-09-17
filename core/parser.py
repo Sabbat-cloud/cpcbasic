@@ -11,6 +11,54 @@ class Program(ASTNode):
 class Statement(ASTNode):
     pass
 
+class DataStatement(Statement):
+    def __init__(self, values):
+        self.values = values
+
+class ReadStatement(Statement):
+    def __init__(self, variables):
+        self.variables = variables
+
+class RestoreStatement(Statement):
+    def __init__(self, line_number=None):
+        self.line_number = line_number
+
+class InputStatement(Statement):
+    def __init__(self, prompt, variables):
+        self.prompt = prompt
+        self.variables = variables
+
+class SymbolStatement(Statement):
+    def __init__(self, char_code, matrix):
+        self.char_code = char_code
+        self.matrix = matrix
+
+class FrameStatement(Statement):
+    pass
+
+class StopStatement(Statement):
+    pass
+
+class WindowStatement(Statement):
+    def __init__(self, left, right, top, bottom):
+        self.left = left
+        self.right = right
+        self.top = top
+        self.bottom = bottom
+
+class WhileStatement(Statement):
+    def __init__(self, condition):
+        self.condition = condition
+
+class WendStatement(Statement):
+    pass
+
+class OnStatement(Statement):
+    def __init__(self, expr, is_gosub, line_numbers):
+        self.expr = expr
+        self.is_gosub = is_gosub
+        self.line_numbers = line_numbers
+
 class PrintStatement(Statement):
     def __init__(self, expressions):
         self.expressions = expressions
@@ -51,7 +99,18 @@ class DrawStatement(Statement):
         self.y = y
         self.pen = pen
 
+class DrawrStatement(Statement):
+    def __init__(self, x, y, pen=None):
+        self.x = x
+        self.y = y
+        self.pen = pen
+
 class MoveStatement(Statement):
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+class MoverStatement(Statement):
     def __init__(self, x, y):
         self.x = x
         self.y = y
@@ -250,6 +309,97 @@ class Parser:
                 self.eat(KEYWORD)
                 return EndStatement()
 
+            elif self.current_token.value == 'DATA':
+                self.eat(KEYWORD)
+                values = []
+                while True:
+                    expr = self.parse_expression()
+                    if expr is not None:
+                        values.append(expr)
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return DataStatement(values)
+
+            elif self.current_token.value == 'READ':
+                self.eat(KEYWORD)
+                variables = []
+                while True:
+                    if self.current_token.type == IDENTIFIER:
+                        variables.append(self.current_token.value)
+                        self.eat(IDENTIFIER)
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return ReadStatement(variables)
+
+            elif self.current_token.value == 'RESTORE':
+                self.eat(KEYWORD)
+                line_number = None
+                if self.current_token.type == NUMBER:
+                    line_number = self.parse_expression()
+                return RestoreStatement(line_number)
+
+            elif self.current_token.value == 'INPUT':
+                self.eat(KEYWORD)
+                prompt = None
+                # Check if there is a prompt string
+                if self.current_token.type == STRING:
+                    prompt = self.current_token.value
+                    self.eat(STRING)
+                    if self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
+                        self.eat(SYMBOL)
+                variables = []
+                while True:
+                    if self.current_token.type == IDENTIFIER:
+                        variables.append(self.current_token.value)
+                        self.eat(IDENTIFIER)
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return InputStatement(prompt, variables)
+
+            elif self.current_token.value == 'FRAME':
+                self.eat(KEYWORD)
+                return FrameStatement()
+
+            elif self.current_token.value == 'STOP':
+                self.eat(KEYWORD)
+                return StopStatement()
+
+            elif self.current_token.value == 'SYMBOL':
+                self.eat(KEYWORD)
+                char_code = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                matrix = []
+                while True:
+                    matrix.append(self.parse_expression())
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return SymbolStatement(char_code, matrix)
+
+            elif self.current_token.value == 'WINDOW':
+                self.eat(KEYWORD)
+                # optionally #channel,
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # channel
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL) # ,
+                left = self.parse_expression()
+                self.eat(SYMBOL)
+                right = self.parse_expression()
+                self.eat(SYMBOL)
+                top = self.parse_expression()
+                self.eat(SYMBOL)
+                bottom = self.parse_expression()
+                return WindowStatement(left, right, top, bottom)
+
             elif self.current_token.value == 'IF':
                 self.eat(KEYWORD)
                 condition = self.parse_expression()
@@ -263,6 +413,33 @@ class Parser:
                     then_stmt = self.parse_statement()
                 
                 return IfStatement(condition, then_stmt)
+
+            elif self.current_token.value == 'WHILE':
+                self.eat(KEYWORD)
+                condition = self.parse_expression()
+                return WhileStatement(condition)
+
+            elif self.current_token.value == 'WEND':
+                self.eat(KEYWORD)
+                return WendStatement()
+
+            elif self.current_token.value == 'ON':
+                self.eat(KEYWORD)
+                expr = self.parse_expression()
+                is_gosub = False
+                if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
+                    self.eat(KEYWORD)
+                    is_gosub = True
+                elif self.current_token.type == KEYWORD and self.current_token.value == 'GOTO':
+                    self.eat(KEYWORD)
+                line_numbers = []
+                while True:
+                    line_numbers.append(self.parse_expression())
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return OnStatement(expr, is_gosub, line_numbers)
                 
             elif self.current_token.value == 'MODE':
                 self.eat(KEYWORD)
@@ -281,8 +458,12 @@ class Parser:
                     self.eat(KEYWORD)
                 end_expr = self.parse_expression()
                 
-                # Assume step 1 for now
-                return ForStatement(var_name, start_expr, end_expr, Literal("1", NUMBER))
+                step_expr = Literal("1", NUMBER)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'STEP':
+                    self.eat(KEYWORD)
+                    step_expr = self.parse_expression()
+                    
+                return ForStatement(var_name, start_expr, end_expr, step_expr)
                 
             elif self.current_token.value == 'NEXT':
                 self.eat(KEYWORD)
@@ -314,6 +495,17 @@ class Parser:
                     pen = self.parse_expression()
                 return DrawStatement(x, y, pen)
 
+            elif self.current_token.value == 'DRAWR':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                pen = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    pen = self.parse_expression()
+                return DrawrStatement(x, y, pen)
+
             elif self.current_token.value == 'MOVE':
                 self.eat(KEYWORD)
                 x = self.parse_expression()
@@ -321,6 +513,13 @@ class Parser:
                 y = self.parse_expression()
                 return MoveStatement(x, y)
                 
+            elif self.current_token.value == 'MOVER':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                return MoverStatement(x, y)
+
             elif self.current_token.value == 'ORIGIN':
                 self.eat(KEYWORD)
                 x = self.parse_expression()
@@ -413,7 +612,7 @@ class Parser:
         while self.current_token.type not in (NEWLINE, EOF):
             if self.current_token.type == SYMBOL and self.current_token.value in (',', ':', ';'):
                 break
-            if self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN'):
+            if self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB'):
                 break
             
             # String literals are kept as Literal nodes directly to simplify
