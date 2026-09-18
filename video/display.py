@@ -38,37 +38,33 @@ class Display:
         self.logical_height = height
         self.scale = scale
         
-        # Physical window
         self.screen = pygame.display.set_mode((self.logical_width * self.scale, self.logical_height * self.scale))
         pygame.display.set_caption("Amstrad CPC BASIC Emulator")
         
-        # Logical surface where everything is drawn
-        self.logical_surface = pygame.Surface((self.logical_width, self.logical_height))
+        self.logical_surface = pygame.Surface((self.logical_width, self.logical_height), depth=8)
         
         self.mode = 1
         
-        # Inks map logical pens (0-15) to hardware colors (0-26)
-        # Default Locomotive BASIC palette for 16 pens:
-        self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 16]
+        self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
+        self.flash_inks = [None] * 16
+        self.flash_inks[14] = 24
+        self.flash_inks[15] = 11
         
         self.current_pen = 1
         self.current_paper = 0
         
-        # Initialize background color
-        self.logical_surface.fill(CPC_PALETTE[self.inks[0]])
+        self._update_palette(False)
+        self.logical_surface.fill(self.current_paper)
         
-        # Origin for graphics (bottom left by default: 0, 0)
         self.origin_x = 0
         self.origin_y = 0
         self.graphics_x = 0
         self.graphics_y = 0
         
-        # Text variables
         pygame.font.init()
         try:
             self.font = pygame.font.Font('assets/cpc464.ttf', 16)
-        except Exception as e:
-            print(f"Warning: Could not load CPC font, using default. {e}")
+        except Exception:
             self.font = pygame.font.SysFont('courier', 16, bold=True)
             
         self.text_col = 1
@@ -78,14 +74,23 @@ class Display:
         self.tag_active = False
 
         self.user_symbols = {
-            240: [8, 28, 62, 127, 8, 8, 8, 8],      # Flecha Arriba
-            241: [8, 8, 8, 8, 127, 62, 28, 8],      # Flecha Abajo
-            242: [8, 12, 14, 15, 14, 12, 8, 0],     # Flecha Izquierda
-            243: [16, 48, 112, 240, 112, 48, 16, 0],# Flecha Derecha
-            250: [24, 24, 24, 126, 24, 24, 36, 66], # Muñeco brazos horizontales
-            251: [24, 24, 90, 60, 24, 24, 36, 66],  # Muñeco brazos arriba
-            252: [24, 24, 24, 60, 90, 24, 36, 66],  # Muñeco brazos abajo
+            240: [8, 28, 62, 127, 8, 8, 8, 8],
+            241: [8, 8, 8, 8, 127, 62, 28, 8],
+            242: [8, 12, 14, 15, 14, 12, 8, 0],
+            243: [16, 48, 112, 240, 112, 48, 16, 0],
+            250: [24, 24, 24, 126, 24, 24, 36, 66],
+            251: [24, 24, 90, 60, 24, 24, 36, 66],
+            252: [24, 24, 24, 60, 90, 24, 36, 66],
         }
+
+    def _update_palette(self, flash_state):
+        palette = [(0,0,0)] * 256
+        for i in range(16):
+            if flash_state and self.flash_inks[i] is not None:
+                palette[i] = CPC_PALETTE[self.flash_inks[i]]
+            else:
+                palette[i] = CPC_PALETTE[self.inks[i]]
+        self.logical_surface.set_palette(palette)
 
     def define_symbol(self, char_code, matrix):
         if 0 <= char_code <= 255 and len(matrix) == 8:
@@ -94,15 +99,23 @@ class Display:
     def set_mode(self, mode):
         if mode in (0, 1, 2):
             self.mode = mode
-            self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 16]
+            self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
+            self.flash_inks = [None] * 16
+            self.flash_inks[14] = 24
+            self.flash_inks[15] = 11
             self.current_pen = 1
             self.current_paper = 0
-            self.logical_surface.fill(CPC_PALETTE[self.inks[self.current_paper]])
+            self._update_palette(False)
+            self.logical_surface.fill(self.current_paper)
             self.update()
 
-    def set_ink(self, pen, color):
+    def set_ink(self, pen, color, color2=None):
         if 0 <= pen < 16 and 0 <= color < 27:
             self.inks[pen] = color
+            if color2 is not None and 0 <= color2 < 27:
+                self.flash_inks[pen] = color2
+            else:
+                self.flash_inks[pen] = None
 
     def set_pen(self, pen):
         if 0 <= pen < 16:
@@ -113,7 +126,7 @@ class Display:
             self.current_paper = paper
 
     def clear_graphics(self):
-        self.logical_surface.fill(CPC_PALETTE[self.inks[self.current_paper]])
+        self.logical_surface.fill(self.current_paper)
         
     def locate(self, col, row):
         self.text_col = col
@@ -125,12 +138,9 @@ class Display:
         else: return 80
 
     def print_text(self, text):
-        fg_color = CPC_PALETTE[self.inks[self.current_pen]]
-        bg_color = CPC_PALETTE[self.inks[self.current_paper]]
-        
         max_cols = self.get_max_cols()
         char_width = self.logical_width // max_cols
-        char_height = 16 # 400 / 25 rows
+        char_height = 16
         
         for char in str(text):
             if char == '\n':
@@ -140,34 +150,44 @@ class Display:
                 char_code = ord(char)
                 
                 if self.tag_active:
-                    # In graphics mode (TAG), origin is bottom-left relative to window or custom origin
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
-                    # Text renders from top-left, so we might need to adjust y
                     y -= char_height
                 else:
                     x = (self.text_col - 1) * char_width
                     y = (self.text_row - 1) * char_height
                 
+                char_surface = None
                 if hasattr(self, 'user_symbols') and char_code in self.user_symbols:
                     matrix = self.user_symbols[char_code]
                     char_surface = pygame.Surface((8, 8))
-                    char_surface.fill(bg_color)
+                    char_surface.fill((0,0,0))
                     for r, row_val in enumerate(matrix):
                         for c in range(8):
                             if row_val & (1 << (7 - c)):
-                                char_surface.set_at((c, r), fg_color)
+                                char_surface.set_at((c, r), (255,255,255))
                     char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
-                    self.logical_surface.blit(char_surface, (x, y))
                 else:
                     try:
-                        char_surface = self.font.render(char, False, fg_color, bg_color)
+                        char_surface = self.font.render(char, False, (255,255,255), (0,0,0))
                         char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
-                        self.logical_surface.blit(char_surface, (x, y))
                     except pygame.error:
-                        pass # Ignore zero-width characters or rendering errors
+                        pass
+                
+                if char_surface is not None:
+                    with pygame.PixelArray(self.logical_surface) as pxarray:
+                        with pygame.PixelArray(char_surface) as char_px:
+                            for cy in range(char_height):
+                                for cx in range(char_width):
+                                    px_x = x + cx
+                                    px_y = y + cy
+                                    if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
+                                        if char_px[cx, cy] & 0xFFFFFF > 0x7FFFFF:
+                                            pxarray[px_x, px_y] = self.current_pen
+                                        else:
+                                            pxarray[px_x, px_y] = self.current_paper
                 
                 if self.tag_active:
-                    self.graphics_x += char_width # CPC coordinates advance right
+                    self.graphics_x += char_width
                 else:
                     self.text_col += 1
                 
@@ -178,7 +198,7 @@ class Display:
             if self.text_row > 25:
                 self.logical_surface.scroll(0, -char_height)
                 rect = pygame.Rect(0, self.logical_height - char_height, self.logical_width, char_height)
-                pygame.draw.rect(self.logical_surface, bg_color, rect)
+                pygame.draw.rect(self.logical_surface, self.current_paper, rect)
                 self.text_row = 25
                 
     def _cpc_to_screen(self, x, y):
@@ -195,7 +215,6 @@ class Display:
             pen = self.current_pen
         self.move(x, y)
         sx, sy = self._cpc_to_screen(x, y)
-        color = CPC_PALETTE[self.inks[pen]]
         
         if self.mode == 0:
             pw, ph = 4, 2
@@ -205,7 +224,7 @@ class Display:
             pw, ph = 1, 2
             
         rect = pygame.Rect(sx, sy, pw, ph)
-        pygame.draw.rect(self.logical_surface, color, rect)
+        pygame.draw.rect(self.logical_surface, pen, rect)
 
     def draw(self, x, y, pen=None):
         if pen is None:
@@ -213,13 +232,12 @@ class Display:
             
         start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
         end_x, end_y = self._cpc_to_screen(x, y)
-        color = CPC_PALETTE[self.inks[pen]]
         
         if self.mode == 0: width = 4
         elif self.mode == 1: width = 2
         else: width = 1
             
-        pygame.draw.line(self.logical_surface, color, (start_x, start_y), (end_x, end_y), width)
+        pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
         self.move(x, y)
 
     def fill(self, pen=None):
@@ -229,28 +247,30 @@ class Display:
         if start_x < 0 or start_x >= self.logical_width or start_y < 0 or start_y >= self.logical_height:
             return
             
-        target_color = self.logical_surface.get_at((start_x, start_y))
-        fill_color = pygame.Color(*CPC_PALETTE[self.inks[pen]])
-        if target_color == fill_color:
+        target_pen = self.logical_surface.get_at_mapped((start_x, start_y))
+        if target_pen == pen:
             return
             
-        # Basic BFS flood fill
         queue = [(start_x, start_y)]
         visited = set()
         
-        # We need to lock the surface for fast pixel access, but pygame.surfarray is better
-        # For simplicity, we just use get_at and set_at, though it can be slow
         while queue:
             x, y = queue.pop(0)
             if (x, y) in visited: continue
             visited.add((x, y))
             
-            if self.logical_surface.get_at((x, y)) == target_color:
-                self.logical_surface.set_at((x, y), fill_color)
+            if self.logical_surface.get_at_mapped((x, y)) == target_pen:
+                self.logical_surface.set_at((x, y), pen)
                 if x > 0: queue.append((x-1, y))
                 if x < self.logical_width - 1: queue.append((x+1, y))
                 if y > 0: queue.append((x, y-1))
                 if y < self.logical_height - 1: queue.append((x, y+1))
+
+    def test(self, x, y):
+        sx, sy = self._cpc_to_screen(x, y)
+        if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:
+            return self.logical_surface.get_at_mapped((sx, sy))
+        return 0
 
     def get_inkey_str(self):
         self.process_events()
@@ -259,7 +279,9 @@ class Display:
         return ""
 
     def update(self):
-        # Scale logical surface to physical window
+        flash_state = (pygame.time.get_ticks() // 300) % 2 == 1
+        self._update_palette(flash_state)
+        
         scaled_surface = pygame.transform.scale(self.logical_surface, (self.logical_width * self.scale, self.logical_height * self.scale))
         self.screen.blit(scaled_surface, (0, 0))
         pygame.display.flip()
@@ -303,4 +325,3 @@ class Display:
                         self.print_text(event.unicode)
                         self.update()
             pygame.time.wait(10)
-

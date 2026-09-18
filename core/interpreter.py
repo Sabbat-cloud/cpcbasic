@@ -1,6 +1,7 @@
 import math
 import random
 import sys
+import pygame
 from core.parser import (Program, PrintStatement, LetStatement, GotoStatement, 
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
                          PlotStatement, DrawStatement, DrawrStatement, MoveStatement, MoverStatement, InkStatement,
@@ -66,7 +67,8 @@ class Interpreter:
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
             "SQ": lambda x: 0,  # stub for sound queue status
-            "LEN": len
+            "LEN": len,
+            "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0
         }
         
     def get_next_line(self, current_line):
@@ -89,7 +91,7 @@ class Interpreter:
                 return expr.value
         elif isinstance(expr, RawExpression):
             s = ""
-            for t in expr.tokens:
+            for i, t in enumerate(expr.tokens):
                 if t.type == 'IDENTIFIER':
                     if t.value.upper() == 'INKEY$':
                         inkey_val = self.display.get_inkey_str()
@@ -97,7 +99,11 @@ class Interpreter:
                     elif t.value.upper() in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$'):
                         s += t.value.upper().replace('$', '_STR')
                     elif t.value.upper() in self.builtins:
-                        s += t.value.upper()
+                        kw = t.value.upper()
+                        s += kw
+                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY"):
+                            if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                                s += "()"
                     elif t.value in self.arrays:
                         s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     else:
@@ -106,6 +112,8 @@ class Interpreter:
                             s += f'"{val}"'
                         else:
                             s += str(val)
+                elif t.type == 'HEX_NUMBER':
+                    s += "0x" + t.value[1:]
                 elif t.type == 'SYMBOL' and t.value == '=':
                     s += '=='
                 elif t.type == 'SYMBOL' and t.value == '<>':
@@ -404,7 +412,8 @@ class Interpreter:
                 elif isinstance(stmt, InkStatement):
                     pen = int(self.evaluate(stmt.pen))
                     color1 = int(self.evaluate(stmt.color1))
-                    self.display.set_ink(pen, color1)
+                    color2 = int(self.evaluate(stmt.color2)) if stmt.color2 else None
+                    self.display.set_ink(pen, color1, color2)
 
                 elif isinstance(stmt, PenStatement):
                     pen = int(self.evaluate(stmt.pen))
