@@ -175,14 +175,18 @@ class DrawrStatement(Statement):
         self.pen = pen
 
 class MoveStatement(Statement):
-    def __init__(self, x, y):
+    def __init__(self, x, y, pen=None, mode=None):
         self.x = x
         self.y = y
+        self.pen = pen
+        self.mode = mode
 
 class MoverStatement(Statement):
-    def __init__(self, x, y):
+    def __init__(self, x, y, pen=None, mode=None):
         self.x = x
         self.y = y
+        self.pen = pen
+        self.mode = mode
 
 class OriginStatement(Statement):
     def __init__(self, x, y, left=None, right=None, top=None, bottom=None):
@@ -230,10 +234,25 @@ class GosubStatement(Statement):
 class ReturnStatement(Statement):
     pass
 
-class DimStatement(Statement):
-    def __init__(self, var_name, dims):
+class EraseStatement(Statement):
+    def __init__(self, arrays):
+        self.arrays = arrays
+
+class EveryStatement(Statement):
+    def __init__(self, ticks, timer_id, line_number):
+        self.ticks = ticks
+        self.timer_id = timer_id
+        self.line_number = line_number
+        
+class LetArrayStatement(Statement):
+    def __init__(self, var_name, dims, expr):
         self.var_name = var_name
         self.dims = dims
+        self.expr = expr
+
+class DimStatement(Statement):
+    def __init__(self, arrays):
+        self.arrays = arrays
 
 class EndStatement(Statement):
     pass
@@ -359,20 +378,53 @@ class Parser:
                 self.eat(KEYWORD)
                 return ReturnStatement()
 
-            elif self.current_token.value == 'DIM':
+            elif self.current_token.value == 'ERASE':
                 self.eat(KEYWORD)
-                var_name = self.current_token.value
-                self.eat(IDENTIFIER)
-                self.eat(SYMBOL) # (
-                dims = []
+                arrays = []
                 while True:
-                    dims.append(self.parse_expression())
+                    arrays.append(self.current_token.value)
+                    self.eat(IDENTIFIER)
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                     else:
                         break
-                self.eat(SYMBOL) # )
-                return DimStatement(var_name, dims)
+                return EraseStatement(arrays)
+
+            elif self.current_token.value == 'EVERY':
+                self.eat(KEYWORD)
+                ticks = self.parse_expression()
+                timer_id = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    timer_id = self.parse_expression()
+                if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
+                    self.eat(KEYWORD)
+                    line_number = self.parse_expression()
+                else:
+                    raise Exception('Expected GOSUB after EVERY')
+                return EveryStatement(ticks, timer_id, line_number)
+
+            elif self.current_token.value == 'DIM':
+                self.eat(KEYWORD)
+                arrays = []
+                while True:
+                    var_name = self.current_token.value
+                    self.eat(IDENTIFIER)
+                    self.eat(SYMBOL) # (
+                    dims = []
+                    while True:
+                        dims.append(self.parse_expression())
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                        else:
+                            break
+                    self.eat(SYMBOL) # )
+                    arrays.append((var_name, dims))
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return DimStatement(arrays)
 
             elif self.current_token.value == 'END':
                 self.eat(KEYWORD)
@@ -648,14 +700,32 @@ class Parser:
                 x = self.parse_expression()
                 self.eat(SYMBOL) # ,
                 y = self.parse_expression()
-                return MoveStatement(x, y)
+                pen = None
+                mode = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    if self.current_token.type != SYMBOL or self.current_token.value != ',':
+                        pen = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        mode = self.parse_expression()
+                return MoveStatement(x, y, pen, mode)
                 
             elif self.current_token.value == 'MOVER':
                 self.eat(KEYWORD)
                 x = self.parse_expression()
                 self.eat(SYMBOL) # ,
                 y = self.parse_expression()
-                return MoverStatement(x, y)
+                pen = None
+                mode = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    if self.current_token.type != SYMBOL or self.current_token.value != ',':
+                        pen = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        mode = self.parse_expression()
+                return MoverStatement(x, y, pen, mode)
 
             elif self.current_token.value == 'ORIGIN':
                 self.eat(KEYWORD)
@@ -788,7 +858,21 @@ class Parser:
         elif self.current_token.type == IDENTIFIER:
             var_name = self.current_token.value
             self.eat(IDENTIFIER)
-            if self.current_token.value == '=':
+            if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                self.eat(SYMBOL)
+                dims = []
+                while True:
+                    dims.append(self.parse_expression())
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                self.eat(SYMBOL) # )
+                if self.current_token.value == '=':
+                    self.eat(SYMBOL)
+                    expr = self.parse_expression()
+                    return LetArrayStatement(var_name, dims, expr)
+            elif self.current_token.value == '=':
                 self.eat(SYMBOL)
                 expr = self.parse_expression()
                 return LetStatement(var_name, expr)
@@ -797,10 +881,18 @@ class Parser:
 
     def parse_expression(self):
         expr_tokens = []
+        paren_level = 0
         while self.current_token.type not in (NEWLINE, EOF):
-            if self.current_token.type == SYMBOL and self.current_token.value in (',', ':', ';'):
+            if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                paren_level += 1
+            elif self.current_token.type == SYMBOL and self.current_token.value == ')':
+                if paren_level == 0:
+                    break
+                paren_level -= 1
+            
+            if paren_level == 0 and self.current_token.type == SYMBOL and self.current_token.value in (',', ':', ';'):
                 break
-            if self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB'):
+            if paren_level == 0 and self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB'):
                 break
             
             # String literals are kept as Literal nodes directly to simplify
@@ -811,7 +903,6 @@ class Parser:
                 
             expr_tokens.append(self.current_token)
             
-            # Use pos trick to eat current token without explicit type check if it's symbol
             self.pos += 1
             if self.pos < len(self.tokens):
                 self.current_token = self.tokens[self.pos]

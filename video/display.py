@@ -48,11 +48,8 @@ class Display:
         self.mode = 1
         
         # Inks map logical pens (0-15) to hardware colors (0-26)
-        self.inks = [0] * 16
-        self.inks[0] = 1  # Background: Blue
-        self.inks[1] = 24 # Pen 1: Yellow
-        self.inks[2] = 20 # Pen 2: Bright Cyan
-        self.inks[3] = 6  # Pen 3: Bright Red
+        # Default Locomotive BASIC palette for 16 pens:
+        self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 16]
         
         self.current_pen = 1
         self.current_paper = 0
@@ -97,6 +94,9 @@ class Display:
     def set_mode(self, mode):
         if mode in (0, 1, 2):
             self.mode = mode
+            self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 24, 16]
+            self.current_pen = 1
+            self.current_paper = 0
             self.logical_surface.fill(CPC_PALETTE[self.inks[self.current_paper]])
             self.update()
 

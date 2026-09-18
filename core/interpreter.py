@@ -13,7 +13,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          OnStatement, BorderStatement, ClearStatement, RandomizeStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
-                         FillStatement)
+                         FillStatement, EraseStatement, EveryStatement, LetArrayStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -98,6 +98,8 @@ class Interpreter:
                         s += t.value.upper().replace('$', '_STR')
                     elif t.value.upper() in self.builtins:
                         s += t.value.upper()
+                    elif t.value in self.arrays:
+                        s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     else:
                         val = self.variables.get(t.value, 0)
                         if isinstance(val, str):
@@ -108,16 +110,37 @@ class Interpreter:
                     s += '=='
                 elif t.type == 'SYMBOL' and t.value == '<>':
                     s += '!='
+                elif t.type == 'KEYWORD':
+                    kw = t.value.upper()
+                    if kw == 'MOD': s += ' % '
+                    elif kw == 'AND': s += ' and '
+                    elif kw == 'OR': s += ' or '
+                    elif kw == 'NOT': s += ' not '
+                    elif kw == 'XOR': s += ' ^ '
+                    else: s += f' {kw} '
                 elif t.type == 'STRING':
                     s += f'"{t.value}"'
                 else:
                     s += str(t.value)
+                    
             try:
-                return eval(s, self.builtins, {})
+                class ArrayWrapper:
+                    def __init__(self, arr_dict):
+                        self.arr_dict = arr_dict
+                    def __call__(self, *args):
+                        return self.arr_dict.get(tuple(int(a) for a in args), 0)
+                
+                eval_globals = self.builtins.copy()
+                eval_globals['REMAIN'] = lambda x: 0
+                for arr_name, arr_dict in self.arrays.items():
+                    safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                    eval_globals[safe_name] = ArrayWrapper(arr_dict)
+                    
+                return eval(s, eval_globals, {})
             except Exception as e:
                 print(f"Error evaluando '{s}': {e}")
                 return 0
-                
+
         return 0
 
     def collect_data(self):
@@ -218,14 +241,28 @@ class Interpreter:
                 elif isinstance(stmt, (EnvStatement, EntStatement, MaskStatement, ZoneStatement, SpeedStatement)):
                     pass # Stubbed to prevent execution errors
 
+                elif isinstance(stmt, EraseStatement):
+                    for var_name in stmt.arrays:
+                        if var_name in self.arrays:
+                            del self.arrays[var_name]
+
+                elif isinstance(stmt, EveryStatement):
+                    pass # Stub for EVERY
+
+                elif isinstance(stmt, LetArrayStatement):
+                    val = self.evaluate(stmt.expr)
+                    dims_eval = tuple(int(self.evaluate(d)) for d in stmt.dims)
+                    if stmt.var_name not in self.arrays:
+                        self.arrays[stmt.var_name] = {}
+                    self.arrays[stmt.var_name][dims_eval] = val
+
                 elif isinstance(stmt, LetStatement):
                     val = self.evaluate(stmt.expr)
                     self.variables[stmt.identifier] = val
                     
                 elif isinstance(stmt, DimStatement):
-                    # For simplicity, we just initialize a flat dict/list placeholder
-                    # CPC Basic supports multi-dimensional arrays, we'll store them flattened or dict-keyed
-                    self.arrays[stmt.var_name] = {}
+                    for var_name, dims in stmt.arrays:
+                        self.arrays[var_name] = {}
                     
                 elif isinstance(stmt, WhileStatement):
                     cond = self.evaluate(stmt.condition)
@@ -338,11 +375,17 @@ class Interpreter:
                 elif isinstance(stmt, MoveStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
+                    if stmt.pen:
+                        pen = int(self.evaluate(stmt.pen))
+                        self.display.set_pen(pen)
                     self.display.move(x, y)
 
                 elif isinstance(stmt, MoverStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
+                    if stmt.pen:
+                        pen = int(self.evaluate(stmt.pen))
+                        self.display.set_pen(pen)
                     curr_x = getattr(self.display, 'graphics_x', 0)
                     curr_y = getattr(self.display, 'graphics_y', 0)
                     self.display.move(curr_x + x, curr_y + y)
@@ -353,7 +396,7 @@ class Interpreter:
                     self.display.origin_x = x
                     self.display.origin_y = y
 
-                elif isinstance(stmt, FillStatement):
+                elif isinstance(stmt, (FillStatement, EraseStatement, EveryStatement, LetArrayStatement)):
                     pen = int(self.evaluate(stmt.pen))
                     if hasattr(self.display, 'fill'):
                         self.display.fill(pen)

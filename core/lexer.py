@@ -18,7 +18,7 @@ KEYWORDS = {
     'LOCATE', 'CLS', 'CLG', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
     'REM', 'INPUT', 'SYMBOL', 'FRAME', 'MASK', 'ZONE', 'WINDOW', 'TRON', 'TROFF', 'TAG', 'TAGOFF',
     'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS',
-    'RANDOMIZE', 'DEG', 'RAD', 'FILL'
+    'RANDOMIZE', 'DEG', 'RAD', 'FILL', 'ERASE', 'EVERY'
 }
 
 token_specification = [
