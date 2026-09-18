@@ -1,5 +1,6 @@
 import math
 import random
+import sys
 from core.parser import (Program, PrintStatement, LetStatement, GotoStatement, 
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
                          PlotStatement, DrawStatement, DrawrStatement, MoveStatement, MoverStatement, InkStatement,
@@ -9,7 +10,10 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DataStatement, ReadStatement, RestoreStatement,
                          InputStatement, SymbolStatement, FrameStatement,
                          StopStatement, WindowStatement, WhileStatement, WendStatement,
-                         OnStatement)
+                         OnStatement, BorderStatement, ClearStatement, RandomizeStatement,
+                         DegStatement, RadStatement, EnvStatement, EntStatement,
+                         MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
+                         FillStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -29,19 +33,28 @@ class Interpreter:
         
         self.line_numbers = sorted(list(self.program.lines.keys()))
         self.for_loops = {}
+        self.for_stack = []
         self.gosub_stack = []
         self.data_values = []
         self.data_ptr = 0
         
+        self.angle_mode = 'RAD'
+        self.tag_active = False
+
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
             "__builtins__": None,
-            "SIN": math.sin,
-            "COS": math.cos,
-            "TAN": math.tan,
+            "SIN": lambda x: math.sin(math.radians(x) if self.angle_mode == 'DEG' else x),
+            "COS": lambda x: math.cos(math.radians(x) if self.angle_mode == 'DEG' else x),
+            "TAN": lambda x: math.tan(math.radians(x) if self.angle_mode == 'DEG' else x),
             "INT": int,
             "ABS": abs,
             "RND": cpc_rnd,
+            "PI": math.pi,
+            "TIME": lambda: int(pygame.time.get_ticks() / 3.33) if 'pygame' in sys.modules else 0,
+            "XPOS": lambda: self.display.graphics_x,
+            "YPOS": lambda: self.display.graphics_y,
+            "VPOS": lambda: self.display.text_row,
             "CHR_STR": cpc_chr,
             "ASC": cpc_asc,
             "SQR": math.sqrt,
@@ -167,6 +180,43 @@ class Interpreter:
 
                 elif isinstance(stmt, ClgStatement):
                     self.display.clear_graphics()
+
+                elif isinstance(stmt, BorderStatement):
+                    col1 = int(self.evaluate(stmt.color1))
+                    col2 = int(self.evaluate(stmt.color2)) if stmt.color2 else None
+                    if hasattr(self.display, 'set_border'):
+                        self.display.set_border(col1)
+
+                elif isinstance(stmt, ClearStatement):
+                    self.variables.clear()
+                    self.arrays.clear()
+                    self.gosub_stack.clear()
+
+                elif isinstance(stmt, RandomizeStatement):
+                    if stmt.expr:
+                        val = self.evaluate(stmt.expr)
+                        random.seed(val)
+                    else:
+                        random.seed()
+
+                elif isinstance(stmt, DegStatement):
+                    self.angle_mode = 'DEG'
+
+                elif isinstance(stmt, RadStatement):
+                    self.angle_mode = 'RAD'
+
+                elif isinstance(stmt, TagStatement):
+                    self.tag_active = True
+                    if hasattr(self.display, 'tag_active'):
+                        self.display.tag_active = True
+
+                elif isinstance(stmt, TagoffStatement):
+                    self.tag_active = False
+                    if hasattr(self.display, 'tag_active'):
+                        self.display.tag_active = False
+
+                elif isinstance(stmt, (EnvStatement, EntStatement, MaskStatement, ZoneStatement, SpeedStatement)):
+                    pass # Stubbed to prevent execution errors
 
                 elif isinstance(stmt, LetStatement):
                     val = self.evaluate(stmt.expr)
@@ -303,6 +353,11 @@ class Interpreter:
                     self.display.origin_x = x
                     self.display.origin_y = y
 
+                elif isinstance(stmt, FillStatement):
+                    pen = int(self.evaluate(stmt.pen))
+                    if hasattr(self.display, 'fill'):
+                        self.display.fill(pen)
+
                 elif isinstance(stmt, InkStatement):
                     pen = int(self.evaluate(stmt.pen))
                     color1 = int(self.evaluate(stmt.color1))
@@ -350,6 +405,9 @@ class Interpreter:
                     
                     self.variables[stmt.identifier] = start_val
                     self.for_loops[stmt.identifier] = (next_pc, end_val, step_val)
+                    if stmt.identifier in self.for_stack:
+                        self.for_stack.remove(stmt.identifier)
+                    self.for_stack.append(stmt.identifier)
                     
                 elif isinstance(stmt, ReadStatement):
                     for var in stmt.variables:
@@ -403,9 +461,13 @@ class Interpreter:
                     pygame.time.wait(20)
 
                 elif isinstance(stmt, SymbolStatement):
-                    char_code = self.evaluate(stmt.char_code)
-                    matrix = [self.evaluate(m) for m in stmt.matrix]
-                    print(f"SYMBOL {char_code} defined with matrix {matrix}")
+                    char_code = int(self.evaluate(stmt.char_code))
+                    matrix = [int(self.evaluate(m)) for m in stmt.matrix]
+                    while len(matrix) < 8:
+                        matrix.append(0)
+                    matrix = matrix[:8]
+                    if hasattr(self.display, 'define_symbol'):
+                        self.display.define_symbol(char_code, matrix)
 
                 elif isinstance(stmt, WindowStatement):
                     left = self.evaluate(stmt.left)
@@ -415,18 +477,24 @@ class Interpreter:
                     print(f"WINDOW defined: {left},{right},{top},{bottom}")
                         
                 elif isinstance(stmt, NextStatement):
-                    if stmt.identifier in self.for_loops:
-                        loop_target, end_val, step_val = self.for_loops[stmt.identifier]
-                        current_val = self.variables.get(stmt.identifier, 0)
+                    var_name = stmt.identifier
+                    if not var_name and self.for_stack:
+                        var_name = self.for_stack[-1]
+                        
+                    if var_name in self.for_loops:
+                        loop_target, end_val, step_val = self.for_loops[var_name]
+                        current_val = self.variables.get(var_name, 0)
                         
                         next_val = current_val + step_val
-                        self.variables[stmt.identifier] = next_val
+                        self.variables[var_name] = next_val
                         
                         if (step_val > 0 and next_val <= end_val) or (step_val < 0 and next_val >= end_val):
                             next_pc = loop_target
                             break
                         else:
-                            del self.for_loops[stmt.identifier]
+                            del self.for_loops[var_name]
+                            if var_name in self.for_stack:
+                                self.for_stack.remove(var_name)
             
             self.display.update()
             self.display.process_events()

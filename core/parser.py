@@ -11,6 +11,38 @@ class Program(ASTNode):
 class Statement(ASTNode):
     pass
 
+class BorderStatement(Statement):
+    def __init__(self, color1, color2=None):
+        self.color1 = color1
+        self.color2 = color2
+
+class ClearStatement(Statement):
+    pass
+
+class RandomizeStatement(Statement):
+    def __init__(self, expr=None):
+        self.expr = expr
+
+class DegStatement(Statement):
+    pass
+
+class RadStatement(Statement):
+    pass
+
+class EnvStatement(Statement):
+    def __init__(self, env_no, sections):
+        self.env_no = env_no
+        self.sections = sections
+
+class EntStatement(Statement):
+    def __init__(self, ent_no, sections):
+        self.ent_no = ent_no
+        self.sections = sections
+
+class FillStatement(Statement):
+    def __init__(self, pen):
+        self.pen = pen
+
 class DataStatement(Statement):
     def __init__(self, values):
         self.values = values
@@ -642,6 +674,11 @@ class Parser:
                     bottom = self.parse_expression()
                 return OriginStatement(x, y, left, right, top, bottom)
                 
+            elif self.current_token.value == 'FILL':
+                self.eat(KEYWORD)
+                pen = self.parse_expression()
+                return FillStatement(pen)
+                
             elif self.current_token.value == 'INK':
                 self.eat(KEYWORD)
                 pen = self.parse_expression()
@@ -677,6 +714,52 @@ class Parser:
             elif self.current_token.value == 'CLG':
                 self.eat(KEYWORD)
                 return ClgStatement()
+
+            elif self.current_token.value == 'BORDER':
+                self.eat(KEYWORD)
+                color1 = self.parse_expression()
+                color2 = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    color2 = self.parse_expression()
+                return BorderStatement(color1, color2)
+
+            elif self.current_token.value == 'CLEAR':
+                self.eat(KEYWORD)
+                return ClearStatement()
+
+            elif self.current_token.value == 'RANDOMIZE':
+                self.eat(KEYWORD)
+                expr = None
+                if self.current_token.type not in (NEWLINE, EOF, SYMBOL):
+                    expr = self.parse_expression()
+                return RandomizeStatement(expr)
+
+            elif self.current_token.value == 'DEG':
+                self.eat(KEYWORD)
+                return DegStatement()
+
+            elif self.current_token.value == 'RAD':
+                self.eat(KEYWORD)
+                return RadStatement()
+
+            elif self.current_token.value == 'ENV':
+                self.eat(KEYWORD)
+                env_no = self.parse_expression()
+                sections = []
+                while self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    sections.append(self.parse_expression())
+                return EnvStatement(env_no, sections)
+
+            elif self.current_token.value == 'ENT':
+                self.eat(KEYWORD)
+                ent_no = self.parse_expression()
+                sections = []
+                while self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    sections.append(self.parse_expression())
+                return EntStatement(ent_no, sections)
 
             elif self.current_token.value == 'SOUND':
                 self.eat(KEYWORD)

@@ -78,6 +78,21 @@ class Display:
         self.text_row = 1
         
         self.key_buffer = []
+        self.tag_active = False
+
+        self.user_symbols = {
+            240: [8, 28, 62, 127, 8, 8, 8, 8],      # Flecha Arriba
+            241: [8, 8, 8, 8, 127, 62, 28, 8],      # Flecha Abajo
+            242: [8, 12, 14, 15, 14, 12, 8, 0],     # Flecha Izquierda
+            243: [16, 48, 112, 240, 112, 48, 16, 0],# Flecha Derecha
+            250: [24, 24, 24, 126, 24, 24, 36, 66], # Muñeco brazos horizontales
+            251: [24, 24, 90, 60, 24, 24, 36, 66],  # Muñeco brazos arriba
+            252: [24, 24, 24, 60, 90, 24, 36, 66],  # Muñeco brazos abajo
+        }
+
+    def define_symbol(self, char_code, matrix):
+        if 0 <= char_code <= 255 and len(matrix) == 8:
+            self.user_symbols[char_code] = matrix
 
     def set_mode(self, mode):
         if mode in (0, 1, 2):
@@ -122,19 +137,39 @@ class Display:
                 self.text_col = 1
                 self.text_row += 1
             else:
-                # Render character
-                try:
-                    char_surface = self.font.render(char, False, fg_color, bg_color)
-                    char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
-                    
+                char_code = ord(char)
+                
+                if self.tag_active:
+                    # In graphics mode (TAG), origin is bottom-left relative to window or custom origin
+                    x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
+                    # Text renders from top-left, so we might need to adjust y
+                    y -= char_height
+                else:
                     x = (self.text_col - 1) * char_width
                     y = (self.text_row - 1) * char_height
-                    
-                    self.logical_surface.blit(char_surface, (x, y))
-                except pygame.error:
-                    pass # Ignore zero-width characters or rendering errors
                 
-                self.text_col += 1
+                if hasattr(self, 'user_symbols') and char_code in self.user_symbols:
+                    matrix = self.user_symbols[char_code]
+                    char_surface = pygame.Surface((8, 8))
+                    char_surface.fill(bg_color)
+                    for r, row_val in enumerate(matrix):
+                        for c in range(8):
+                            if row_val & (1 << (7 - c)):
+                                char_surface.set_at((c, r), fg_color)
+                    char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
+                    self.logical_surface.blit(char_surface, (x, y))
+                else:
+                    try:
+                        char_surface = self.font.render(char, False, fg_color, bg_color)
+                        char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
+                        self.logical_surface.blit(char_surface, (x, y))
+                    except pygame.error:
+                        pass # Ignore zero-width characters or rendering errors
+                
+                if self.tag_active:
+                    self.graphics_x += char_width # CPC coordinates advance right
+                else:
+                    self.text_col += 1
                 
             if self.text_col > max_cols:
                 self.text_col = 1
@@ -186,6 +221,36 @@ class Display:
             
         pygame.draw.line(self.logical_surface, color, (start_x, start_y), (end_x, end_y), width)
         self.move(x, y)
+
+    def fill(self, pen=None):
+        if pen is None:
+            pen = self.current_pen
+        start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
+        if start_x < 0 or start_x >= self.logical_width or start_y < 0 or start_y >= self.logical_height:
+            return
+            
+        target_color = self.logical_surface.get_at((start_x, start_y))
+        fill_color = pygame.Color(*CPC_PALETTE[self.inks[pen]])
+        if target_color == fill_color:
+            return
+            
+        # Basic BFS flood fill
+        queue = [(start_x, start_y)]
+        visited = set()
+        
+        # We need to lock the surface for fast pixel access, but pygame.surfarray is better
+        # For simplicity, we just use get_at and set_at, though it can be slow
+        while queue:
+            x, y = queue.pop(0)
+            if (x, y) in visited: continue
+            visited.add((x, y))
+            
+            if self.logical_surface.get_at((x, y)) == target_color:
+                self.logical_surface.set_at((x, y), fill_color)
+                if x > 0: queue.append((x-1, y))
+                if x < self.logical_width - 1: queue.append((x+1, y))
+                if y > 0: queue.append((x, y-1))
+                if y < self.logical_height - 1: queue.append((x, y+1))
 
     def get_inkey_str(self):
         self.process_events()

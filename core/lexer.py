@@ -17,7 +17,8 @@ KEYWORDS = {
     'AND', 'OR', 'XOR', 'NOT', 'MOD', 'DEFINT', 'DEFREAL', 'DEFSTR',
     'LOCATE', 'CLS', 'CLG', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
     'REM', 'INPUT', 'SYMBOL', 'FRAME', 'MASK', 'ZONE', 'WINDOW', 'TRON', 'TROFF', 'TAG', 'TAGOFF',
-    'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS'
+    'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS',
+    'RANDOMIZE', 'DEG', 'RAD', 'FILL'
 }
 
 token_specification = [
