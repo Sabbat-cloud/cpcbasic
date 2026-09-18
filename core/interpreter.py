@@ -216,7 +216,7 @@ class Interpreter:
                     col1 = int(self.evaluate(stmt.color1))
                     col2 = int(self.evaluate(stmt.color2)) if stmt.color2 else None
                     if hasattr(self.display, 'set_border'):
-                        self.display.set_border(col1)
+                        self.display.set_border(col1, col2)
 
                 elif isinstance(stmt, ClearStatement):
                     self.variables.clear()
@@ -529,24 +529,31 @@ class Interpreter:
                     print(f"WINDOW defined: {left},{right},{top},{bottom}")
                         
                 elif isinstance(stmt, NextStatement):
-                    var_name = stmt.identifier
-                    if not var_name and self.for_stack:
-                        var_name = self.for_stack[-1]
-                        
-                    if var_name in self.for_loops:
-                        loop_target, end_val, step_val = self.for_loops[var_name]
-                        current_val = self.variables.get(var_name, 0)
-                        
-                        next_val = current_val + step_val
-                        self.variables[var_name] = next_val
-                        
-                        if (step_val > 0 and next_val <= end_val) or (step_val < 0 and next_val >= end_val):
-                            next_pc = loop_target
-                            break
-                        else:
-                            del self.for_loops[var_name]
-                            if var_name in self.for_stack:
-                                self.for_stack.remove(var_name)
+                    identifiers = getattr(stmt, 'identifiers', [stmt.identifier])
+                    
+                    next_jump = None
+                    for var_name in identifiers:
+                        if not var_name and self.for_stack:
+                            var_name = self.for_stack[-1]
+                            
+                        if var_name in self.for_loops:
+                            loop_target, end_val, step_val = self.for_loops[var_name]
+                            current_val = self.variables.get(var_name, 0)
+                            
+                            next_val = current_val + step_val
+                            self.variables[var_name] = next_val
+                            
+                            if (step_val > 0 and next_val <= end_val) or (step_val < 0 and next_val >= end_val):
+                                next_jump = loop_target
+                                break # Do not process subsequent variables yet, we loop back
+                            else:
+                                del self.for_loops[var_name]
+                                if var_name in self.for_stack:
+                                    self.for_stack.remove(var_name)
+                    
+                    if next_jump is not None:
+                        next_pc = next_jump
+                        break
             
             self.display.update()
             self.display.process_events()

@@ -38,12 +38,19 @@ class Display:
         self.logical_height = height
         self.scale = scale
         
-        self.screen = pygame.display.set_mode((self.logical_width * self.scale, self.logical_height * self.scale))
+        self.border_size_logical = 32
+        self.screen_width = (self.logical_width + 2 * self.border_size_logical) * self.scale
+        self.screen_height = (self.logical_height + 2 * self.border_size_logical) * self.scale
+        
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
         pygame.display.set_caption("Amstrad CPC BASIC Emulator")
         
         self.logical_surface = pygame.Surface((self.logical_width, self.logical_height), depth=8)
         
         self.mode = 1
+        
+        self.border_color1 = 1
+        self.border_color2 = None
         
         self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
         self.flash_inks = [None] * 16
@@ -116,6 +123,14 @@ class Display:
                 self.flash_inks[pen] = color2
             else:
                 self.flash_inks[pen] = None
+
+    def set_border(self, color, color2=None):
+        if 0 <= color < 27:
+            self.border_color1 = color
+            if color2 is not None and 0 <= color2 < 27:
+                self.border_color2 = color2
+            else:
+                self.border_color2 = None
 
     def set_pen(self, pen):
         if 0 <= pen < 16:
@@ -282,8 +297,11 @@ class Display:
         flash_state = (pygame.time.get_ticks() // 300) % 2 == 1
         self._update_palette(flash_state)
         
+        active_border = self.border_color2 if flash_state and self.border_color2 is not None else self.border_color1
+        self.screen.fill(CPC_PALETTE[active_border])
+        
         scaled_surface = pygame.transform.scale(self.logical_surface, (self.logical_width * self.scale, self.logical_height * self.scale))
-        self.screen.blit(scaled_surface, (0, 0))
+        self.screen.blit(scaled_surface, (self.border_size_logical * self.scale, self.border_size_logical * self.scale))
         pygame.display.flip()
 
     def process_events(self):

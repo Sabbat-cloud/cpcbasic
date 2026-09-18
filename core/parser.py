@@ -153,8 +153,10 @@ class ForStatement(Statement):
         self.step_expr = step_expr
 
 class NextStatement(Statement):
-    def __init__(self, identifier):
-        self.identifier = identifier
+    def __init__(self, identifiers):
+        self.identifiers = identifiers
+        # for backwards compatibility with any remaining code:
+        self.identifier = identifiers[0] if identifiers else None
 
 class PlotStatement(Statement):
     def __init__(self, x, y, pen=None):
@@ -656,11 +658,18 @@ class Parser:
                 
             elif self.current_token.value == 'NEXT':
                 self.eat(KEYWORD)
-                var_name = None
-                if self.current_token.type == IDENTIFIER:
-                    var_name = self.current_token.value
-                    self.eat(IDENTIFIER)
-                return NextStatement(var_name)
+                var_names = []
+                while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    if self.current_token.type == IDENTIFIER:
+                        var_names.append(self.current_token.value)
+                        self.eat(IDENTIFIER)
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                if not var_names:
+                    var_names = [None]
+                return NextStatement(var_names)
                 
             elif self.current_token.value == 'PLOT':
                 self.eat(KEYWORD)

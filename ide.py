@@ -9,13 +9,13 @@ class CPCIDE:
         self.root = root
         self.root.title("Amstrad CPC BASIC IDE")
         
-        # 640x400 for scale 1
-        self.root.geometry("1100x450")
+        # 704x464 for scale 1 (640x400 + 32 logical border)
+        self.root.geometry("1170x520")
 
         self.main_frame = tk.Frame(self.root)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.emu_frame = tk.Frame(self.main_frame, width=640, height=400, bg="black")
+        self.emu_frame = tk.Frame(self.main_frame, width=704, height=464, bg="black")
         self.emu_frame.pack(side=tk.LEFT, padx=10, pady=10, fill=tk.NONE, expand=False)
         self.emu_frame.pack_propagate(False)
 
