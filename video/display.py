@@ -140,8 +140,29 @@ class Display:
         if 0 <= paper < 16:
             self.current_paper = paper
 
+    def get_text_window(self):
+        if hasattr(self, 'text_window') and self.text_window is not None:
+            return self.text_window
+        return (1, self.get_max_cols(), 1, 25)
+
+    def set_window(self, left, right, top, bottom):
+        self.text_window = (left, right, top, bottom)
+        self.locate(1, 1)
+
     def clear_graphics(self):
-        self.logical_surface.fill(self.current_paper)
+        left, right, top, bottom = self.get_text_window()
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        
+        px = (left - 1) * char_width
+        py = (top - 1) * char_height
+        pw = (right - left + 1) * char_width
+        ph = (bottom - top + 1) * char_height
+        
+        rect = pygame.Rect(px, py, pw, ph)
+        pygame.draw.rect(self.logical_surface, self.current_paper, rect)
+        self.locate(1, 1)
         
     def locate(self, col, row):
         self.text_col = col
@@ -157,6 +178,10 @@ class Display:
         char_width = self.logical_width // max_cols
         char_height = 16
         
+        left, right, top, bottom = self.get_text_window()
+        win_cols = right - left + 1
+        win_rows = bottom - top + 1
+        
         for char in str(text):
             if char == '\n':
                 self.text_col = 1
@@ -168,8 +193,10 @@ class Display:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
                     y -= char_height
                 else:
-                    x = (self.text_col - 1) * char_width
-                    y = (self.text_row - 1) * char_height
+                    abs_col = left + self.text_col - 1
+                    abs_row = top + self.text_row - 1
+                    x = (abs_col - 1) * char_width
+                    y = (abs_row - 1) * char_height
                 
                 char_surface = None
                 if hasattr(self, 'user_symbols') and char_code in self.user_symbols:
@@ -206,15 +233,23 @@ class Display:
                 else:
                     self.text_col += 1
                 
-            if self.text_col > max_cols:
+            if self.text_col > win_cols:
                 self.text_col = 1
                 self.text_row += 1
                 
-            if self.text_row > 25:
-                self.logical_surface.scroll(0, -char_height)
-                rect = pygame.Rect(0, self.logical_height - char_height, self.logical_width, char_height)
-                pygame.draw.rect(self.logical_surface, self.current_paper, rect)
-                self.text_row = 25
+            if self.text_row > win_rows:
+                px = (left - 1) * char_width
+                py = (top - 1) * char_height
+                pw = win_cols * char_width
+                ph = win_rows * char_height
+                
+                subsurface = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
+                subsurface.scroll(0, -char_height)
+                
+                bottom_rect = pygame.Rect(px, py + ph - char_height, pw, char_height)
+                pygame.draw.rect(self.logical_surface, self.current_paper, bottom_rect)
+                
+                self.text_row = win_rows
                 
     def _cpc_to_screen(self, x, y):
         screen_x = self.origin_x + x

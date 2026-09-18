@@ -353,6 +353,11 @@ class Parser:
         if self.current_token.type == KEYWORD:
             if self.current_token.value == 'PRINT':
                 self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # stream
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
                 exprs = []
                 while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
                     if self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
@@ -771,16 +776,31 @@ class Parser:
 
             elif self.current_token.value == 'PEN':
                 self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # stream
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
                 pen = self.parse_expression()
                 return PenStatement(pen)
 
             elif self.current_token.value == 'PAPER':
                 self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # stream
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
                 paper = self.parse_expression()
                 return PaperStatement(paper)
 
             elif self.current_token.value == 'LOCATE':
                 self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # stream
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
                 col = self.parse_expression()
                 self.eat(SYMBOL) # ,
                 row = self.parse_expression()
@@ -788,6 +808,9 @@ class Parser:
 
             elif self.current_token.value == 'CLS':
                 self.eat(KEYWORD)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    self.parse_expression() # stream
                 return ClsStatement()
 
             elif self.current_token.value == 'CLG':

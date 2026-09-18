@@ -26,7 +26,7 @@ token_specification = [
     ('NUMBER',   r'\d+(\.\d*)?([eE][+-]?\d+)?'), 
     ('STRING',   r'".*?"'),                
     ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_]*[%!\$]?'), 
-    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?]'), 
+    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#]'), 
     ('NEWLINE',  r'\n'),                   
     ('SKIP',     r'[ \t\r]+'),               
     ('MISMATCH', r'.'),                    

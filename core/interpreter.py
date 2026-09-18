@@ -522,11 +522,12 @@ class Interpreter:
                         self.display.define_symbol(char_code, matrix)
 
                 elif isinstance(stmt, WindowStatement):
-                    left = self.evaluate(stmt.left)
-                    right = self.evaluate(stmt.right)
-                    top = self.evaluate(stmt.top)
-                    bottom = self.evaluate(stmt.bottom)
-                    print(f"WINDOW defined: {left},{right},{top},{bottom}")
+                    left = int(self.evaluate(stmt.left))
+                    right = int(self.evaluate(stmt.right))
+                    top = int(self.evaluate(stmt.top))
+                    bottom = int(self.evaluate(stmt.bottom))
+                    if hasattr(self.display, 'set_window'):
+                        self.display.set_window(left, right, top, bottom)
                         
                 elif isinstance(stmt, NextStatement):
                     identifiers = getattr(stmt, 'identifiers', [stmt.identifier])

@@ -1,0 +1,7 @@
+10 MODE 0
+20 FOR n=0 TO 7
+30 WINDOW #n,n+1,n+6,n+1,n+6
+40 PAPER #n,n+4
+50 CLS #n
+60 FOR c=1 TO 200:NEXT c
+70 NEXT n
