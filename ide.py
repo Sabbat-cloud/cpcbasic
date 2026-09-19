@@ -22,6 +22,9 @@ class CPCIDE:
         self.editor_frame = tk.Frame(self.main_frame)
         self.editor_frame.pack(side=tk.RIGHT, padx=10, pady=10, fill=tk.BOTH, expand=True)
 
+        self.filename_label = tk.Label(self.editor_frame, text="Sin título", font=("Arial", 10, "bold"), anchor="e")
+        self.filename_label.pack(fill=tk.X, pady=(0, 5))
+
         self.text_area = scrolledtext.ScrolledText(self.editor_frame, wrap=tk.WORD, font=("Courier", 12))
         self.text_area.pack(fill=tk.BOTH, expand=True)
         
@@ -100,9 +103,16 @@ class CPCIDE:
             pass
         return "break" if event else None
 
+    def _update_filename_label(self):
+        if self.current_file:
+            self.filename_label.config(text=os.path.basename(self.current_file))
+        else:
+            self.filename_label.config(text="Sin título")
+
     def new_file(self):
         self.text_area.delete(1.0, tk.END)
         self.current_file = None
+        self._update_filename_label()
 
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("Archivos BASIC", "*.cpcbas *.bas"), ("Todos los archivos", "*.*")])
@@ -112,6 +122,7 @@ class CPCIDE:
                     self.text_area.delete(1.0, tk.END)
                     self.text_area.insert(tk.END, f.read())
                 self.current_file = file_path
+                self._update_filename_label()
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo abrir el archivo:\n{e}")
 
@@ -120,6 +131,7 @@ class CPCIDE:
             try:
                 with open(self.current_file, "w", encoding="utf-8") as f:
                     f.write(self.text_area.get(1.0, tk.END))
+                self._update_filename_label()
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo guardar el archivo:\n{e}")
         else:
@@ -130,6 +142,7 @@ class CPCIDE:
         if file_path:
             self.current_file = file_path
             self.save_file()
+            self._update_filename_label()
 
     def run_code(self):
         self.stop_code()

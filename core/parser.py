@@ -19,6 +19,9 @@ class BorderStatement(Statement):
 class ClearStatement(Statement):
     pass
 
+class ClearInputStatement(Statement):
+    pass
+
 class RandomizeStatement(Statement):
     def __init__(self, expr=None):
         self.expr = expr
@@ -225,9 +228,10 @@ class ClgStatement(Statement):
     pass
 
 class IfStatement(Statement):
-    def __init__(self, condition, then_stmt):
+    def __init__(self, condition, then_stmts, else_stmts=None):
         self.condition = condition
-        self.then_stmt = then_stmt
+        self.then_stmts = then_stmts
+        self.else_stmts = else_stmts or []
 
 class GosubStatement(Statement):
     def __init__(self, line_number):
@@ -534,13 +538,36 @@ class Parser:
                 if self.current_token.type == KEYWORD and self.current_token.value == 'THEN':
                     self.eat(KEYWORD)
                 
+                then_stmts = []
+                else_stmts = []
+                
+                # Parse THEN branch
                 if self.current_token.type == NUMBER:
                     line_num = self.parse_expression()
-                    then_stmt = GotoStatement(line_num)
+                    then_stmts.append(GotoStatement(line_num))
                 else:
-                    then_stmt = self.parse_statement()
+                    while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == KEYWORD and self.current_token.value == 'ELSE'):
+                        stmt = self.parse_statement()
+                        if stmt:
+                            then_stmts.append(stmt)
+                        if self.current_token.type == SYMBOL and self.current_token.value == ':':
+                            self.eat(SYMBOL)
+                            
+                # Parse ELSE branch
+                if self.current_token.type == KEYWORD and self.current_token.value == 'ELSE':
+                    self.eat(KEYWORD)
+                    if self.current_token.type == NUMBER:
+                        line_num = self.parse_expression()
+                        else_stmts.append(GotoStatement(line_num))
+                    else:
+                        while self.current_token.type not in (NEWLINE, EOF):
+                            stmt = self.parse_statement()
+                            if stmt:
+                                else_stmts.append(stmt)
+                            if self.current_token.type == SYMBOL and self.current_token.value == ':':
+                                self.eat(SYMBOL)
                 
-                return IfStatement(condition, then_stmt)
+                return IfStatement(condition, then_stmts, else_stmts)
 
             elif self.current_token.value == 'WHILE':
                 self.eat(KEYWORD)
@@ -828,6 +855,9 @@ class Parser:
 
             elif self.current_token.value == 'CLEAR':
                 self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'INPUT':
+                    self.eat(KEYWORD)
+                    return ClearInputStatement()
                 return ClearStatement()
 
             elif self.current_token.value == 'RANDOMIZE':
@@ -874,9 +904,9 @@ class Parser:
                     else:
                         break
                 
-                # Fill missing args with 0 (default)
+                # Fill missing args with None
                 while len(args) < 7:
-                    args.append(Literal("0", NUMBER))
+                    args.append(None)
                     
                 return SoundStatement(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
                 
@@ -924,7 +954,7 @@ class Parser:
             
             if paren_level == 0 and self.current_token.type == SYMBOL and self.current_token.value in (',', ':', ';'):
                 break
-            if paren_level == 0 and self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB'):
+            if paren_level == 0 and self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB', 'ELSE'):
                 break
             
             # String literals are kept as Literal nodes directly to simplify

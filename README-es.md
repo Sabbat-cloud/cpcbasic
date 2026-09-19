@@ -48,10 +48,13 @@ python main.py midisco.dsk
 
 ## Ejemplos
 
-Revisa la carpeta `examples/` para probar las capacidades:
-- `matrix.cpcbas`: Una demo visual de colores, números aleatorios, bucles y sonido procedural.
-- `teclado.cpcbas`: Un bucle de interacción de teclado en tiempo real usando `INKEY$`.
-- `hola.cpcbas`: Un simple "Hola Mundo" demostrando el dibujado de líneas y cambio de tintas.
+Revisa la carpeta `examples/` para probar las capacidades del emulador:
+- `matrix.cpcbas`: Efecto Matrix que demuestra el uso de colores, números aleatorios, bucles y sonido procedural.
+- `juego_reflejos.cpcbas`: Un juego completo con temporizadores asíncronos (`AFTER`/`EVERY`), envolventes de volumen/tono, lectura física del teclado (`INKEY`) y manejo complejo de pantalla.
+- `demo_colores.cpcbas`: Intercambio de colores de bordes y tintas usando temporizadores lógicos.
+- `movimiento.cpcbas`: Demo gráfica moviendo elementos interactivos.
+- `teclado.cpcbas`: Un bucle de interacción de teclado en tiempo real usando el búfer `INKEY$`.
+- `circulos.cpcbas` y similares: Pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
 
 ## Créditos y Agradecimientos
 - Tipografía: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)

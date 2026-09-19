@@ -11,10 +11,10 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DataStatement, ReadStatement, RestoreStatement,
                          InputStatement, SymbolStatement, FrameStatement,
                          StopStatement, WindowStatement, WhileStatement, WendStatement,
-                         OnStatement, BorderStatement, ClearStatement, RandomizeStatement,
+                         OnStatement, BorderStatement, ClearStatement, ClearInputStatement, RandomizeStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
-                         FillStatement, EraseStatement, EveryStatement, LetArrayStatement)
+                         FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -36,6 +36,7 @@ class Interpreter:
         self.for_loops = {}
         self.for_stack = []
         self.gosub_stack = []
+        self.timers = {0: None, 1: None, 2: None, 3: None}
         self.data_values = []
         self.data_ptr = 0
         
@@ -68,7 +69,9 @@ class Interpreter:
             "MAX": max,
             "SQ": lambda x: 0,  # stub for sound queue status
             "LEN": len,
-            "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0
+            "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
+            "REMAIN": lambda x: 0,
+            "INKEY": lambda key: self.display.get_inkey_state(int(key))
         }
         
     def get_next_line(self, current_line):
@@ -139,7 +142,6 @@ class Interpreter:
                         return self.arr_dict.get(tuple(int(a) for a in args), 0)
                 
                 eval_globals = self.builtins.copy()
-                eval_globals['REMAIN'] = lambda x: 0
                 for arr_name, arr_dict in self.arrays.items():
                     safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     eval_globals[safe_name] = ArrayWrapper(arr_dict)
@@ -167,8 +169,32 @@ class Interpreter:
         self.running = True
         
         while self.running and self.pc is not None:
-            statements = self.program.lines.get(self.pc, [])
+            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            if hasattr(self, 'display'):
+                self.display.process_events()
+                if current_time - getattr(self, 'last_update', 0) >= 20:
+                    self.display.update()
+                    self.last_update = current_time
+            # -- Timer Interrupt Check (AFTER / EVERY) --
+            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            interrupt_triggered = False
+            for t_id in range(4):
+                t_info = self.timers.get(t_id)
+                if t_info and current_time >= t_info['next_trigger']:
+                    # Trigger interrupt: save current PC, jump to target line
+                    self.gosub_stack.append(self.pc)
+                    self.pc = t_info['target']
+                    if t_info['type'] == 'EVERY':
+                        t_info['next_trigger'] = current_time + t_info['delay_ms']
+                    else:
+                        self.timers[t_id] = None
+                    interrupt_triggered = True
+                    break # Execute only one interrupt at a time
             
+            if interrupt_triggered:
+                continue
+                
+            statements = list(self.program.lines.get(self.pc, []))
             next_pc = self.get_next_line(self.pc)
             
             for stmt in statements:
@@ -223,6 +249,10 @@ class Interpreter:
                     self.arrays.clear()
                     self.gosub_stack.clear()
 
+                elif isinstance(stmt, ClearInputStatement):
+                    if hasattr(self.display, 'key_buffer'):
+                        self.display.key_buffer.clear()
+
                 elif isinstance(stmt, RandomizeStatement):
                     if stmt.expr:
                         val = self.evaluate(stmt.expr)
@@ -254,8 +284,33 @@ class Interpreter:
                         if var_name in self.arrays:
                             del self.arrays[var_name]
 
+                elif isinstance(stmt, AfterStatement):
+                    delay = int(self.evaluate(stmt.delay))
+                    timer_id = int(self.evaluate(stmt.timer_id))
+                    target = int(self.evaluate(stmt.line_number))
+                    if 0 <= timer_id <= 3:
+                        delay_ms = delay * 20 # 1/50th of a second
+                        current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                        self.timers[timer_id] = {
+                            'type': 'AFTER',
+                            'delay_ms': delay_ms,
+                            'target': target,
+                            'next_trigger': current_time + delay_ms
+                        }
+                        
                 elif isinstance(stmt, EveryStatement):
-                    pass # Stub for EVERY
+                    delay = int(self.evaluate(stmt.ticks))
+                    timer_id = int(self.evaluate(stmt.timer_id))
+                    target = int(self.evaluate(stmt.line_number))
+                    if 0 <= timer_id <= 3:
+                        delay_ms = delay * 20 # 1/50th of a second
+                        current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                        self.timers[timer_id] = {
+                            'type': 'EVERY',
+                            'delay_ms': delay_ms,
+                            'target': target,
+                            'next_trigger': current_time + delay_ms
+                        }
 
                 elif isinstance(stmt, LetArrayStatement):
                     val = self.evaluate(stmt.expr)
@@ -404,7 +459,7 @@ class Interpreter:
                     self.display.origin_x = x
                     self.display.origin_y = y
 
-                elif isinstance(stmt, (FillStatement, EraseStatement, EveryStatement, LetArrayStatement)):
+                elif isinstance(stmt, FillStatement):
                     pen = int(self.evaluate(stmt.pen))
                     if hasattr(self.display, 'fill'):
                         self.display.fill(pen)
@@ -423,32 +478,49 @@ class Interpreter:
                     paper = int(self.evaluate(stmt.paper))
                     self.display.set_paper(paper)
 
+                elif isinstance(stmt, EnvStatement):
+                    env_no = int(self.evaluate(stmt.env_no))
+                    sections = [int(self.evaluate(s)) for s in stmt.sections]
+                    self.sound.set_env(env_no, sections)
+                    
+                elif isinstance(stmt, EntStatement):
+                    ent_no = int(self.evaluate(stmt.ent_no))
+                    sections = [int(self.evaluate(s)) for s in stmt.sections]
+                    self.sound.set_ent(ent_no, sections)
+
                 elif isinstance(stmt, SoundStatement):
-                    channel = int(self.evaluate(stmt.channel))
-                    period = int(self.evaluate(stmt.period))
-                    duration = int(self.evaluate(stmt.duration))
-                    volume = int(self.evaluate(stmt.volume))
-                    env = int(self.evaluate(stmt.env))
-                    ent = int(self.evaluate(stmt.ent))
-                    noise = int(self.evaluate(stmt.noise))
+                    channel = int(self.evaluate(stmt.channel)) if stmt.channel else 1
+                    period = int(self.evaluate(stmt.period)) if stmt.period else 0
+                    duration = int(self.evaluate(stmt.duration)) if stmt.duration else 20
+                    volume = int(self.evaluate(stmt.volume)) if stmt.volume else 12
+                    env = int(self.evaluate(stmt.env)) if stmt.env else 0
+                    ent = int(self.evaluate(stmt.ent)) if stmt.ent else 0
+                    noise = int(self.evaluate(stmt.noise)) if stmt.noise else 0
                     print(f"[AUDIO] SOUND {channel},{period},{duration},{volume}")
                     self.sound.play_sound(channel, period, duration, volume, env, ent, noise)
                     
                 elif isinstance(stmt, IfStatement):
                     cond_val = self.evaluate(stmt.condition)
-                    if cond_val:
-                        if isinstance(stmt.then_stmt, GotoStatement):
-                            target = self.evaluate(stmt.then_stmt.line_number)
+                    branch_stmts = stmt.then_stmts if cond_val else getattr(stmt, 'else_stmts', [])
+                    
+                    should_break = False
+                    for b_stmt in branch_stmts:
+                        if isinstance(b_stmt, GotoStatement):
+                            target = self.evaluate(b_stmt.line_number)
                             if target in self.program.lines:
                                 next_pc = target
+                                should_break = True
                                 break
                             else:
                                 print(f"Line {target} does not exist!")
                                 self.running = False
+                                should_break = True
                                 break
                         else:
-                            # Execute inline statement
-                            statements.append(stmt.then_stmt) # It will be processed in the next loop iteration of this same line
+                            statements.append(b_stmt)
+                    
+                    if should_break:
+                        break
                             
                 elif isinstance(stmt, ForStatement):
                     start_val = self.evaluate(stmt.start_expr)
@@ -509,8 +581,8 @@ class Interpreter:
                         self.variables[var] = val
 
                 elif isinstance(stmt, FrameStatement):
-                    import pygame
-                    pygame.time.wait(20)
+                    if 'pygame' in sys.modules:
+                        pygame.time.wait(20)
 
                 elif isinstance(stmt, SymbolStatement):
                     char_code = int(self.evaluate(stmt.char_code))

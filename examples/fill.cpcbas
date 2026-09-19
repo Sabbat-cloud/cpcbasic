@@ -1,0 +1,9 @@
+10 cls 
+20 move 20,20
+30 draw 620,20
+40 draw 310,380
+50 draw 20,20
+60 move 320,200
+70 for n = 1 to 16
+80 fill n
+90 next n

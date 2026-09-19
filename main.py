@@ -1,4 +1,14 @@
 import sys
+import os
+
+# Forzar driver de audio DirectSound para evitar crashes con monitores HDMI
+if sys.platform == 'win32':
+    os.environ['SDL_AUDIODRIVER'] = 'directsound'
+
+import pygame
+# Configurar mezclador a 44100Hz (frecuencia clásica/original)
+pygame.mixer.pre_init(44100, -16, 2, 1024)
+
 import argparse
 from core.lexer import Lexer
 from core.parser import Parser

@@ -48,10 +48,13 @@ python main.py mydisk.dsk
 
 ## Examples
 
-Check the `examples/` folder to test the capabilities:
-- `matrix.cpcbas`: A visual demo of colors, arrays, random numbers, loops, and procedural sound.
-- `teclado.cpcbas`: A real-time keyboard interaction loop using `INKEY$`.
-- `hola.cpcbas`: A simple "Hello World" demonstrating plotting lines, moving coordinates, and changing inks.
+Check the `examples/` folder to test the capabilities of the emulator:
+- `matrix.cpcbas`: A Matrix effect showcasing colors, random numbers, loops, and procedural sound.
+- `juego_reflejos.cpcbas`: A complete reflex game using asynchronous timers (`AFTER`/`EVERY`), volume/tone envelopes, direct hardware keyboard reading (`INKEY`), and complex screen handling.
+- `demo_colores.cpcbas`: A border and ink color cycling demo using software delays.
+- `movimiento.cpcbas`: Graphical demo displaying interactive moving elements.
+- `teclado.cpcbas`: A real-time keyboard interaction loop using the `INKEY$` buffer.
+- `circulos.cpcbas` and others: Graphical tests for drawing (`PLOT`, `DRAW`, trigonometry).
 
 ## Credits & Thanks
 - Font: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)

@@ -1,0 +1,14 @@
+10 CLS
+20 x = 20 : y = 20
+30 m$ = CHR$(250)
+40 LOCATE x,y: PRINT m$;
+50 FRAME
+60 a$ = INKEY$
+70 IF a$="o" OR a$="O" THEN d=-1 : m$=CHR$(251) ELSE IF a$="p" OR a$="P" THEN d=1 : m$=CHR$(250) ELSE d=0
+80 IF d=0 THEN 50
+90 nx = x + d
+100 IF nx < 1 OR nx > 39 THEN 50
+110 LOCATE x,y: PRINT " ";
+120 x = nx
+130 LOCATE x,y: PRINT m$;
+140 GOTO 50

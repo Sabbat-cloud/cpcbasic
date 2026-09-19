@@ -34,6 +34,8 @@ CPC_PALETTE = [
 class Display:
     def __init__(self, width=640, height=400, scale=2):
         pygame.init()
+        # Activar la repetición automática de teclas para que INKEY$ detecte teclas mantenidas
+        pygame.key.set_repeat(300, 50)
         self.logical_width = width
         self.logical_height = height
         self.scale = scale
@@ -217,16 +219,16 @@ class Display:
                 
                 if char_surface is not None:
                     with pygame.PixelArray(self.logical_surface) as pxarray:
-                        with pygame.PixelArray(char_surface) as char_px:
-                            for cy in range(char_height):
-                                for cx in range(char_width):
-                                    px_x = x + cx
-                                    px_y = y + cy
-                                    if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
-                                        if char_px[cx, cy] & 0xFFFFFF > 0x7FFFFF:
-                                            pxarray[px_x, px_y] = self.current_pen
-                                        else:
-                                            pxarray[px_x, px_y] = self.current_paper
+                        for cy in range(char_height):
+                            for cx in range(char_width):
+                                px_x = x + cx
+                                px_y = y + cy
+                                if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
+                                    color = char_surface.get_at((cx, cy))
+                                    if color.r > 127:
+                                        pxarray[px_x, px_y] = self.current_pen
+                                    else:
+                                        pxarray[px_x, px_y] = self.current_paper
                 
                 if self.tag_active:
                     self.graphics_x += char_width
@@ -327,6 +329,28 @@ class Display:
         if self.key_buffer:
             return self.key_buffer.pop(0)
         return ""
+
+    def get_inkey_state(self, cpc_key):
+        self.process_events()
+        keys = pygame.key.get_pressed()
+        
+        # Mapeo de teclas de hardware comunes de Amstrad CPC a Pygame
+        cpc_to_pygame = {
+            47: pygame.K_SPACE,
+            77: pygame.K_LEFT,
+            79: pygame.K_RIGHT,
+            78: pygame.K_DOWN,
+            76: pygame.K_UP,
+            9:  pygame.K_RETURN,
+            18: pygame.K_KP_ENTER,
+            66: pygame.K_ESCAPE,
+            8:  pygame.K_BACKSPACE,
+            # Se pueden añadir más letras de la matriz según se necesiten
+        }
+        
+        if cpc_key in cpc_to_pygame:
+            return 0 if keys[cpc_to_pygame[cpc_key]] else -1
+        return -1
 
     def update(self):
         flash_state = (pygame.time.get_ticks() // 300) % 2 == 1
