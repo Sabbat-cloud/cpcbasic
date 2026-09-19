@@ -78,6 +78,7 @@ class Display:
             
         self.text_col = 1
         self.text_row = 1
+        self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
         
         self.key_buffer = []
         self.tag_active = False
@@ -164,7 +165,21 @@ class Display:
         
         rect = pygame.Rect(px, py, pw, ph)
         pygame.draw.rect(self.logical_surface, self.current_paper, rect)
+        
+        for r in range(top - 1, bottom):
+            for c in range(left - 1, right):
+                if 0 <= r < 25 and 0 <= c < 80:
+                    self.text_buffer[r][c] = ' '
+                    
         self.locate(1, 1)
+
+    def copychr(self, stream=0):
+        left, right, top, bottom = self.get_text_window()
+        abs_col = left + self.text_col - 1
+        abs_row = top + self.text_row - 1
+        if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
+            return self.text_buffer[abs_row - 1][abs_col - 1]
+        return ' '
         
     def locate(self, col, row):
         self.text_col = col
@@ -233,6 +248,8 @@ class Display:
                 if self.tag_active:
                     self.graphics_x += char_width
                 else:
+                    if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
+                        self.text_buffer[abs_row - 1][abs_col - 1] = char
                     self.text_col += 1
                 
             if self.text_col > win_cols:

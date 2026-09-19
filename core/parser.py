@@ -116,6 +116,11 @@ class MaskStatement(Statement):
         self.mask = mask
         self.first_point = first_point
 
+class PokeStatement(Statement):
+    def __init__(self, address, value):
+        self.address = address
+        self.value = value
+
 class TagStatement(Statement):
     pass
 
@@ -375,6 +380,14 @@ class Parser:
                             break
                 return PrintStatement(exprs)
             
+            elif self.current_token.value == 'POKE':
+                self.eat(KEYWORD)
+                addr_expr = self.parse_expression()
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                val_expr = self.parse_expression()
+                return PokeStatement(addr_expr, val_expr)
+
             elif self.current_token.value == 'GOTO':
                 self.eat(KEYWORD)
                 expr = self.parse_expression()

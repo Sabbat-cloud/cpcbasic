@@ -8,13 +8,16 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 
 ## Features
 
-- **Lexical Tokenizer & AST Parser**: Full interpretation of Locomotive BASIC keywords, logic loops (`FOR`, `IF/THEN`), subroutines (`GOSUB`/`RETURN`), and mathematical functions.
-- **Authentic Graphics Subsystem**: Uses the standard Amstrad CPC firmware colors. Supports standard hardware resolutions (`MODE 0`, `MODE 1`, `MODE 2`) with proper pixel scaling. It implements graphical commands such as `PLOT`, `DRAW`, `MOVE`, `ORIGIN`, and `CLG`.
-- **String & Terminal Output**: Handles standard `PRINT` statements with separators (`,`, `;`), along with functions like `CHR$`.
-- **Original Pixel Font**: Integrates the original CPC464 pixel font for a 1:1 text rendering experience (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
-- **Procedural Audio (AY-3-8912)**: Accurately parses the `SOUND` command and generates procedural square waves and white noise in real-time via `numpy` and Pygame's mixer.
-- **Keyboard Interaction**: Support for non-blocking asynchronous keyboard reading (`INKEY$`).
-- **Disk (.dsk) Read Support**: On-the-fly mounting of `.dsk` files. It extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats seamlessly.
+- **Lexical Tokenizer & AST Parser**: Full interpretation of Locomotive BASIC keywords, logic loops (FOR, IF/THEN), subroutines (GOSUB/RETURN), and mathematical functions.
+- **Math & String Functions**: 100% complete standard Amstrad mathematics (ATN, SIN, COS, TAN, PI, SQR, INT, FIX, ROUND, CINT, CREAL, UNT, LOG, MAX, MIN, EXP, SGN) and string manipulations (CHR$, COPYCHR$, LEFT$, UPPER$, STR$, SPACE$, STRING$, HEX$, BIN$, INSTR, DEC$).
+- **Authentic Graphics Subsystem**: Uses the standard Amstrad CPC firmware colors. Supports standard hardware resolutions (MODE 0, MODE 1, MODE 2) with proper pixel scaling. It implements graphical commands such as PLOT, DRAW, MOVE, ORIGIN, and CLG.
+- **String & Terminal Output**: Handles standard PRINT statements with separators (,, ;), along with functions like CHR$.
+- **Original Pixel Font**: Integrates the original CPC464 pixel font for a 1:1 text rendering experience (LOCATE, PRINT, PEN, PAPER).
+- **Procedural Audio (AY-3-8912)**: Accurately parses the SOUND command and generates procedural square waves and white noise in real-time via 
+umpy and Pygame's mixer.
+- **Keyboard & Joystick Interaction**: Support for asynchronous keyboard reading (INKEY$, INKEY) and simulated Amstrad Joysticks using Pygame (JOY).
+- **Virtual Memory (PEEK/POKE)**: Implements a 64KB virtual RAM array allowing legacy scripts with PEEK and POKE commands to execute successfully without crashing.
+- **Disk (.dsk) Read Support**: On-the-fly mounting of .dsk files. It extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats seamlessly.
 
 *(Note: It does not support tokenized binary BASIC files or compiled Z80 machine code binaries since it is a high-level language interpreter, not a CPU emulator).*
 

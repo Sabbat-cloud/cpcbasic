@@ -14,7 +14,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          OnStatement, BorderStatement, ClearStatement, ClearInputStatement, RandomizeStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
-                         FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement)
+                         FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -42,6 +42,9 @@ class Interpreter:
         
         self.angle_mode = 'RAD'
         self.tag_active = False
+        
+        # Virtual 64KB RAM for PEEK/POKE
+        self.ram = bytearray(65536)
 
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
@@ -71,9 +74,49 @@ class Interpreter:
             "LEN": len,
             "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
             "REMAIN": lambda x: 0,
-            "INKEY": lambda key: self.display.get_inkey_state(int(key))
+            "INKEY": lambda key: self.display.get_inkey_state(int(key)),
+            "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
+            "CREAL": float,
+            "CINT": lambda x: int(round(x)),
+            "FIX": int,
+            "ROUND": lambda x, d=0: round(x, d) if d > 0 else int(round(x, d)),
+            "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
+            "LEFT_STR": lambda s, n: s[:n] if n > 0 else "",
+            "UPPER_STR": lambda s: s.upper(),
+            "STR_STR": lambda x: f" {x}" if x >= 0 else str(x),
+            "SPACE_STR": lambda n: " " * int(n),
+            "STRING_STR": lambda n, c: (chr(int(c)) if isinstance(c, (int, float)) else c[0]) * int(n),
+            "HEX_STR": lambda x, w=None: hex(int(x))[2:].upper().zfill(w) if w else hex(int(x))[2:].upper(),
+            "BIN_STR": lambda x, w=None: bin(int(x))[2:].zfill(w) if w else bin(int(x))[2:],
+            "INSTR": lambda a, b, c=None: b.find(c, a-1) + 1 if c is not None else a.find(b) + 1,
+            "PEEK": lambda addr: self.ram[int(addr) & 0xFFFF],
+            "JOY": lambda joy_id: self.get_joy_state(int(joy_id)),
+            "ATN": lambda x: math.degrees(math.atan(x)) if self.angle_mode == 'DEG' else math.atan(x),
+            "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
+            "MIN": min,
+            "EXP": math.exp,
+            "DEC_STR": lambda x, fmt: f"{x:f}"[:len(fmt)] if isinstance(fmt, str) else str(x)
         }
         
+    def get_joy_state(self, joy_id):
+        keys = pygame.key.get_pressed()
+        state = 0
+        if joy_id == 0:
+            if keys[pygame.K_UP]: state |= 1
+            if keys[pygame.K_DOWN]: state |= 2
+            if keys[pygame.K_LEFT]: state |= 4
+            if keys[pygame.K_RIGHT]: state |= 8
+            if keys[pygame.K_SPACE] or keys[pygame.K_z]: state |= 16
+            if keys[pygame.K_x]: state |= 32
+        elif joy_id == 1:
+            if keys[pygame.K_w]: state |= 1
+            if keys[pygame.K_s]: state |= 2
+            if keys[pygame.K_a]: state |= 4
+            if keys[pygame.K_d]: state |= 8
+            if keys[pygame.K_LCTRL]: state |= 16
+            if keys[pygame.K_LALT]: state |= 32
+        return state
+
     def get_next_line(self, current_line):
         try:
             idx = self.line_numbers.index(current_line)
@@ -99,7 +142,7 @@ class Interpreter:
                     if t.value.upper() == 'INKEY$':
                         inkey_val = self.display.get_inkey_str()
                         s += f'"{inkey_val}"'
-                    elif t.value.upper() in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$'):
+                    elif t.value.upper() in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
                         s += t.value.upper().replace('$', '_STR')
                     elif t.value.upper() in self.builtins:
                         kw = t.value.upper()
@@ -121,6 +164,8 @@ class Interpreter:
                     s += '=='
                 elif t.type == 'SYMBOL' and t.value == '<>':
                     s += '!='
+                elif t.type == 'SYMBOL' and t.value == '#':
+                    pass  # ignore stream symbol
                 elif t.type == 'KEYWORD':
                     kw = t.value.upper()
                     if kw == 'MOD': s += ' % '
@@ -600,6 +645,11 @@ class Interpreter:
                     bottom = int(self.evaluate(stmt.bottom))
                     if hasattr(self.display, 'set_window'):
                         self.display.set_window(left, right, top, bottom)
+
+                elif isinstance(stmt, PokeStatement):
+                    addr = int(self.evaluate(stmt.address)) & 0xFFFF
+                    val = int(self.evaluate(stmt.value)) & 0xFF
+                    self.ram[addr] = val
                         
                 elif isinstance(stmt, NextStatement):
                     identifiers = getattr(stmt, 'identifiers', [stmt.identifier])

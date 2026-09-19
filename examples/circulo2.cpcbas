@@ -1,0 +1,11 @@
+5 cls
+10 plot 10,10 
+20 draw 10,390 
+30 draw 630,390 
+40 draw 630,10
+50 draw 10,10
+110 deg
+120 FOR a=1 TO 360
+130 MOVE 320,200
+140 PLOT 320+190*COS(a),200+190*SIN(a)
+150 NEXT 

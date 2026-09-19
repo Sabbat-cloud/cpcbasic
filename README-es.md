@@ -9,11 +9,13 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 ## Características
 
 - **Tokenizador Léxico y Parser AST**: Interpretación completa de palabras clave de Locomotive BASIC, bucles lógicos (`FOR`, `IF/THEN`), subrutinas (`GOSUB`/`RETURN`) y funciones matemáticas.
+- **Funciones Matemáticas y de Cadena**: 100% de cobertura matemática del estándar Amstrad (`ATN`, `SIN`, `COS`, `TAN`, `PI`, `SQR`, `INT`, `FIX`, `ROUND`, `CINT`, `CREAL`, `UNT`, `LOG`, `MAX`, `MIN`, `EXP`, `SGN`) y amplio soporte de cadenas (`CHR$`, `COPYCHR$`, `LEFT$`, `UPPER$`, `STR$`, `SPACE$`, `STRING$`, `HEX$`, `BIN$`, `INSTR`, `DEC$`).
 - **Subsistema Gráfico Auténtico**: Utiliza la paleta de colores de firmware estándar del Amstrad CPC y soporta resoluciones de hardware (`MODE 0`, `MODE 1`, `MODE 2`). Implementa comandos gráficos como `PLOT`, `DRAW`, `MOVE`, `ORIGIN`, y `CLG`.
 - **Cadenas y Salida de Terminal**: Maneja correctamente las instrucciones `PRINT` con separadores (`,`, `;`), además de funciones de cadena como `CHR$`.
 - **Fuente de Píxeles Original**: Integra la fuente de píxeles original del CPC464 para una experiencia de renderizado de texto 1:1 (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Audio Procedural (AY-3-8912)**: Interpreta de manera precisa el comando `SOUND` y genera ondas cuadradas y ruido blanco procedurales en tiempo real mediante `numpy` y el mixer de Pygame.
-- **Interacción con el Teclado**: Soporte para lectura asíncrona de teclado (`INKEY$`).
+- **Interacción con Teclado y Joysticks**: Soporte para lectura asíncrona de teclado (`INKEY$`, `INKEY`) y joysticks simulados mediante Pygame (`JOY`).
+- **Memoria Virtual (PEEK/POKE)**: Implementa una matriz de RAM virtual de 64KB, lo que permite que scripts antiguos con comandos `PEEK` y `POKE` se ejecuten sin lanzar errores por falta de memoria.
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios de código máquina Z80 compilados, dado que es un intérprete de lenguaje de alto nivel, no un emulador de CPU).*
@@ -55,6 +57,8 @@ Revisa la carpeta `examples/` para probar las capacidades del emulador:
 - `movimiento.cpcbas`: Demo gráfica moviendo elementos interactivos.
 - `teclado.cpcbas`: Un bucle de interacción de teclado en tiempo real usando el búfer `INKEY$`.
 - `circulos.cpcbas` y similares: Pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
+
+- **Ejemplos del Manual Oficial**: Gracias a las últimas actualizaciones en variables de cadena y matemáticas, la mayoría de los ejemplos sencillos del *Manual de Usuario de Locomotive BASIC* pueden probarse directamente (por ejemplo, pegándolos en 	emp_run.cpcbas) y funcionarán a la primera.
 
 ## Créditos y Agradecimientos
 - Tipografía: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)
