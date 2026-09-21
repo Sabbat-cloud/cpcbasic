@@ -1,0 +1,5 @@
+10 FOR x=1 TO 4
+20 READ nombre$,apellido$
+30 PRINT "Don ";nombre$;" ";apellido$
+40 NEXT
+50 DATA Manuel,Gonzalez,Daniel,Garcia,Jorge,Perez,Juan,Lopez

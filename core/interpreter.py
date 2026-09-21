@@ -14,7 +14,8 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          OnStatement, BorderStatement, ClearStatement, ClearInputStatement, RandomizeStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
-                         FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement)
+                         FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
+                         RsxStatement)
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -39,12 +40,20 @@ class Interpreter:
         self.timers = {0: None, 1: None, 2: None, 3: None}
         self.data_values = []
         self.data_ptr = 0
+        self.user_functions = {}
+        self.default_types = {chr(c): 'REAL' for c in range(ord('A'), ord('Z')+1)}
+        self.interrupts_enabled = True
         
         self.angle_mode = 'RAD'
         self.tag_active = False
         
         # Virtual 64KB RAM for PEEK/POKE
         self.ram = bytearray(65536)
+        
+        # Bank RAM for RSX
+        self.bank_record_length = 255
+        self.bank_current_record = 0
+        self.bank_memory = bytearray(65536)
 
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
@@ -88,7 +97,7 @@ class Interpreter:
             "STRING_STR": lambda n, c: (chr(int(c)) if isinstance(c, (int, float)) else c[0]) * int(n),
             "HEX_STR": lambda x, w=None: hex(int(x))[2:].upper().zfill(w) if w else hex(int(x))[2:].upper(),
             "BIN_STR": lambda x, w=None: bin(int(x))[2:].zfill(w) if w else bin(int(x))[2:],
-            "INSTR": lambda a, b, c=None: b.find(c, a-1) + 1 if c is not None else a.find(b) + 1,
+            "INSTR": lambda a, b, c=None: b.find(c, int(a)-1) + 1 if c is not None else a.find(b) + 1,
             "PEEK": lambda addr: self.ram[int(addr) & 0xFFFF],
             "JOY": lambda joy_id: self.get_joy_state(int(joy_id)),
             "ATN": lambda x: math.degrees(math.atan(x)) if self.angle_mode == 'DEG' else math.atan(x),
@@ -126,6 +135,36 @@ class Interpreter:
         except ValueError:
             return None
 
+    def typecast(self, var_name, val):
+        if var_name.endswith('%'):
+            try: return int(val)
+            except: return 0
+        elif var_name.endswith('!'):
+            try: return float(val)
+            except: return 0.0
+        elif var_name.endswith('$'):
+            return str(val)
+        else:
+            def_type = self.default_types.get(var_name[0].upper(), 'REAL')
+            if def_type == 'INT':
+                try: return int(val)
+                except: return 0
+            elif def_type == 'STR':
+                return str(val)
+            else:
+                try: return float(val)
+                except: return 0.0
+
+    def get_default_value(self, var_name):
+        if var_name.endswith('%'): return 0
+        elif var_name.endswith('!'): return 0.0
+        elif var_name.endswith('$'): return ""
+        else:
+            def_type = self.default_types.get(var_name[0].upper(), 'REAL')
+            if def_type == 'INT': return 0
+            elif def_type == 'STR': return ""
+            else: return 0.0
+
     def evaluate(self, expr):
         if isinstance(expr, Literal):
             if expr.type == 'NUMBER':
@@ -150,10 +189,15 @@ class Interpreter:
                         if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY"):
                             if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                 s += "()"
-                    elif t.value in self.arrays:
+                    elif t.value in self.arrays and i + 1 < len(expr.tokens) and expr.tokens[i+1].value == '(':
                         s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                    elif t.value.upper() in self.user_functions:
+                        s += f"USER_FN_{t.value.upper()}"
+                        # If called without parenthesis, add them
+                        if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                            s += "()"
                     else:
-                        val = self.variables.get(t.value, 0)
+                        val = self.variables.get(t.value, self.get_default_value(t.value))
                         if isinstance(val, str):
                             s += f'"{val}"'
                         else:
@@ -164,6 +208,10 @@ class Interpreter:
                     s += '=='
                 elif t.type == 'SYMBOL' and t.value == '<>':
                     s += '!='
+                elif t.type == 'SYMBOL' and t.value == '^':
+                    s += '**'
+                elif t.type == 'SYMBOL' and t.value == '\\':
+                    s += '//'
                 elif t.type == 'SYMBOL' and t.value == '#':
                     pass  # ignore stream symbol
                 elif t.type == 'KEYWORD':
@@ -173,6 +221,11 @@ class Interpreter:
                     elif kw == 'OR': s += ' or '
                     elif kw == 'NOT': s += ' not '
                     elif kw == 'XOR': s += ' ^ '
+                    elif kw in self.builtins:
+                        s += kw
+                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN"):
+                            if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                                s += "()"
                     else: s += f' {kw} '
                 elif t.type == 'STRING':
                     s += f'"{t.value}"'
@@ -190,6 +243,8 @@ class Interpreter:
                 for arr_name, arr_dict in self.arrays.items():
                     safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     eval_globals[safe_name] = ArrayWrapper(arr_dict)
+                for fn_name, fn_func in self.user_functions.items():
+                    eval_globals[f"USER_FN_{fn_name}"] = fn_func
                     
                 return eval(s, eval_globals, {})
             except Exception as e:
@@ -223,18 +278,20 @@ class Interpreter:
             # -- Timer Interrupt Check (AFTER / EVERY) --
             current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
             interrupt_triggered = False
-            for t_id in range(4):
-                t_info = self.timers.get(t_id)
-                if t_info and current_time >= t_info['next_trigger']:
-                    # Trigger interrupt: save current PC, jump to target line
-                    self.gosub_stack.append(self.pc)
-                    self.pc = t_info['target']
-                    if t_info['type'] == 'EVERY':
-                        t_info['next_trigger'] = current_time + t_info['delay_ms']
-                    else:
-                        self.timers[t_id] = None
-                    interrupt_triggered = True
-                    break # Execute only one interrupt at a time
+            if self.interrupts_enabled:
+                for t_id in range(4):
+                    t_info = self.timers.get(t_id)
+                    if t_info and current_time >= t_info['next_trigger']:
+                        # Trigger interrupt: save current PC, jump to target line
+                        self.gosub_stack.append((self.pc, True))
+                        self.pc = t_info['target']
+                        self.interrupts_enabled = False # Implicit DI
+                        if t_info['type'] == 'EVERY':
+                            t_info['next_trigger'] = current_time + t_info['delay_ms']
+                        else:
+                            self.timers[t_id] = None
+                        interrupt_triggered = True
+                        break # Execute only one interrupt at a time
             
             if interrupt_triggered:
                 continue
@@ -246,6 +303,8 @@ class Interpreter:
                 if isinstance(stmt, PrintStatement):
                     out = []
                     newline = True
+                    vals_for_using = []
+                    
                     for expr in stmt.expressions:
                         if isinstance(expr, Literal) and expr.type == 'SEPARATOR':
                             if expr.value == ';':
@@ -256,29 +315,56 @@ class Interpreter:
                         else:
                             evaluated = self.evaluate(expr)
                             val = str(evaluated)
-                            if isinstance(evaluated, (int, float)) and evaluated >= 0:
-                                val = " " + val
-                            out.append(val)
+                            if getattr(stmt, 'using_fmt', None):
+                                vals_for_using.append(evaluated)
+                            else:
+                                if isinstance(evaluated, (int, float)) and evaluated >= 0:
+                                    val = " " + val
+                                out.append(val)
                             newline = True
                             
                     out_str = "".join(out)
+                    
+                    if getattr(stmt, 'using_fmt', None):
+                        fmt = str(self.evaluate(stmt.using_fmt))
+                        # Basic substitution for ## and ####
+                        for v in vals_for_using:
+                            # Replace first occurrence of #...# with formatted number
+                            import re
+                            def repl(m):
+                                field = m.group(0)
+                                if isinstance(v, (int, float)):
+                                    return f"{v:>{len(field)}}"
+                                return str(v)[:len(field)]
+                            fmt = re.sub(r'#+', repl, fmt, count=1)
+                        out_str = fmt
+                        
                     # Print to terminal for logging
                     try:
                         print(out_str)
                     except UnicodeEncodeError:
                         print(out_str.encode('ascii', 'replace').decode('ascii'))
                         
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
                     # Print to CPC graphical screen
-                    self.display.print_text(out_str + ("\n" if newline else ""))
+                    if getattr(stmt, 'stream', None) is not None and getattr(stmt, 'stream', None) == 8:
+                        self.display.print_text(out_str + ("\r\n" if newline else ""), 0)
+                    else:
+                        self.display.print_text(out_str + ("\r\n" if newline else ""), stream)
                     
                 elif isinstance(stmt, LocateStatement):
                     col = int(self.evaluate(stmt.col))
-                    row = int(self.evaluate(stmt.row))
-                    self.display.locate(col, row)
+                    row = int(self.evaluate(stmt.row)) if getattr(stmt, 'row', None) else None
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                    if row is not None:
+                        self.display.locate(col, row, stream)
+                    else:
+                        self.display.locate(col, self.display.streams[stream]['text_row'] if hasattr(self.display, 'streams') else self.display.text_row, stream)
                     
                 elif isinstance(stmt, ClsStatement):
-                    self.display.clear_graphics()
-                    self.display.locate(1, 1)
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                    self.display.clear_graphics(stream)
+                    self.display.locate(1, 1, stream)
 
                 elif isinstance(stmt, ClgStatement):
                     self.display.clear_graphics()
@@ -295,7 +381,9 @@ class Interpreter:
                     self.gosub_stack.clear()
 
                 elif isinstance(stmt, ClearInputStatement):
-                    if hasattr(self.display, 'key_buffer'):
+                    if hasattr(self.display, 'clear_input'):
+                        self.display.clear_input()
+                    elif hasattr(self.display, 'key_buffer'):
                         self.display.key_buffer.clear()
 
                 elif isinstance(stmt, RandomizeStatement):
@@ -321,8 +409,16 @@ class Interpreter:
                     if hasattr(self.display, 'tag_active'):
                         self.display.tag_active = False
 
-                elif isinstance(stmt, (EnvStatement, EntStatement, MaskStatement, ZoneStatement, SpeedStatement)):
+                elif isinstance(stmt, (ZoneStatement, SpeedStatement)):
                     pass # Stubbed to prevent execution errors
+
+                elif isinstance(stmt, MaskStatement):
+                    if stmt.mask is not None:
+                        mask = int(self.evaluate(stmt.mask))
+                        self.display.set_mask(mask)
+                    if stmt.first_point is not None:
+                        first_point = int(self.evaluate(stmt.first_point))
+                        self.display.set_mask_first(first_point)
 
                 elif isinstance(stmt, EraseStatement):
                     for var_name in stmt.arrays:
@@ -358,15 +454,32 @@ class Interpreter:
                         }
 
                 elif isinstance(stmt, LetArrayStatement):
-                    val = self.evaluate(stmt.expr)
-                    dims_eval = tuple(int(self.evaluate(d)) for d in stmt.dims)
-                    if stmt.var_name not in self.arrays:
-                        self.arrays[stmt.var_name] = {}
-                    self.arrays[stmt.var_name][dims_eval] = val
+                    if stmt.var_name.upper() in ('MID$', 'MID_STR'):
+                        val = str(self.evaluate(stmt.expr))
+                        target_var = stmt.dims[0].tokens[0].value
+                        var_val = str(self.variables.get(target_var, ""))
+                        start = int(self.evaluate(stmt.dims[1]))
+                        if len(stmt.dims) >= 3:
+                            length = int(self.evaluate(stmt.dims[2]))
+                        else:
+                            length = len(val)
+                        
+                        replace_str = val[:length]
+                        new_str = var_val[:start-1] + replace_str + var_val[start-1+len(replace_str):]
+                        if len(new_str) > len(var_val):
+                            new_str = new_str[:len(var_val)]
+                        
+                        self.variables[target_var] = new_str
+                    else:
+                        val = self.evaluate(stmt.expr)
+                        dims_eval = tuple(int(self.evaluate(d)) for d in stmt.dims)
+                        if stmt.var_name not in self.arrays:
+                            self.arrays[stmt.var_name] = {}
+                        self.arrays[stmt.var_name][dims_eval] = val
 
                 elif isinstance(stmt, LetStatement):
                     val = self.evaluate(stmt.expr)
-                    self.variables[stmt.identifier] = val
+                    self.variables[stmt.identifier] = self.typecast(stmt.identifier, val)
                     
                 elif isinstance(stmt, DimStatement):
                     for var_name, dims in stmt.arrays:
@@ -412,7 +525,7 @@ class Interpreter:
                         target = int(self.evaluate(stmt.line_numbers[val - 1]))
                         if target in self.program.lines:
                             if stmt.is_gosub:
-                                self.gosub_stack.append(next_pc)
+                                self.gosub_stack.append((next_pc, False))
                             next_pc = target
                             break
                         else:
@@ -433,7 +546,7 @@ class Interpreter:
                 elif isinstance(stmt, GosubStatement):
                     target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:
-                        self.gosub_stack.append(next_pc)
+                        self.gosub_stack.append((next_pc, False))
                         next_pc = target
                         break
                     else:
@@ -443,7 +556,13 @@ class Interpreter:
                         
                 elif isinstance(stmt, ReturnStatement):
                     if self.gosub_stack:
-                        next_pc = self.gosub_stack.pop()
+                        ret_val = self.gosub_stack.pop()
+                        if isinstance(ret_val, tuple):
+                            next_pc, is_interrupt = ret_val
+                            if is_interrupt:
+                                self.interrupts_enabled = True
+                        else:
+                            next_pc = ret_val
                         break
                     else:
                         print(f"RETURN without GOSUB in {self.pc}")
@@ -468,13 +587,25 @@ class Interpreter:
                 elif isinstance(stmt, DrawStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
-                    pen = int(self.evaluate(stmt.pen)) if stmt.pen else None
+                    pen = None
+                    if stmt.pen:
+                        pen = int(self.evaluate(stmt.pen))
+                        self.display.set_graphics_pen(pen)
+                    if getattr(stmt, 'mode', None) is not None:
+                        mode = int(self.evaluate(stmt.mode))
+                        self.display.set_bg_mode(mode)
                     self.display.draw(x, y, pen)
 
                 elif isinstance(stmt, DrawrStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
-                    pen = int(self.evaluate(stmt.pen)) if stmt.pen else None
+                    pen = None
+                    if stmt.pen:
+                        pen = int(self.evaluate(stmt.pen))
+                        self.display.set_graphics_pen(pen)
+                    if getattr(stmt, 'mode', None) is not None:
+                        mode = int(self.evaluate(stmt.mode))
+                        self.display.set_bg_mode(mode)
                     # DRAWR logic: relative to current position
                     curr_x = getattr(self.display, 'graphics_x', 0)
                     curr_y = getattr(self.display, 'graphics_y', 0)
@@ -485,7 +616,10 @@ class Interpreter:
                     y = int(self.evaluate(stmt.y))
                     if stmt.pen:
                         pen = int(self.evaluate(stmt.pen))
-                        self.display.set_pen(pen)
+                        self.display.set_graphics_pen(pen)
+                    if stmt.mode is not None:
+                        mode = int(self.evaluate(stmt.mode))
+                        self.display.set_bg_mode(mode)
                     self.display.move(x, y)
 
                 elif isinstance(stmt, MoverStatement):
@@ -493,7 +627,10 @@ class Interpreter:
                     y = int(self.evaluate(stmt.y))
                     if stmt.pen:
                         pen = int(self.evaluate(stmt.pen))
-                        self.display.set_pen(pen)
+                        self.display.set_graphics_pen(pen)
+                    if getattr(stmt, 'mode', None) is not None:
+                        mode = int(self.evaluate(stmt.mode))
+                        self.display.set_bg_mode(mode)
                     curr_x = getattr(self.display, 'graphics_x', 0)
                     curr_y = getattr(self.display, 'graphics_y', 0)
                     self.display.move(curr_x + x, curr_y + y)
@@ -509,6 +646,94 @@ class Interpreter:
                     if hasattr(self.display, 'fill'):
                         self.display.fill(pen)
 
+                elif isinstance(stmt, RsxStatement):
+                    if stmt.command == 'SCREENSWAP':
+                        args = [int(self.evaluate(p)) for p in stmt.params]
+                        if len(args) == 2:
+                            self.display.screenswap(args[0], args[1])
+                        elif len(args) == 3:
+                            self.display.screenswap(args[1], args[2], section=args[0])
+                    elif stmt.command == 'SCREENCOPY':
+                        args = [int(self.evaluate(p)) for p in stmt.params]
+                        if len(args) == 2:
+                            self.display.screencopy(args[0], args[1]) # dest, src
+                    elif stmt.command == 'BANKOPEN':
+                        args = [int(self.evaluate(p)) for p in stmt.params]
+                        if len(args) > 0:
+                            self.bank_record_length = args[0]
+                        self.bank_current_record = 0
+                    elif stmt.command == 'BANKWRITE':
+                        # |BANKWRITE, @<codigo>, <cadena> [, <registro>]
+                        args = [self.evaluate(p) for p in stmt.params]
+                        if len(args) >= 2:
+                            err_var = args[0] # Literal string from parse
+                            text = str(args[1])
+                            if len(args) >= 3:
+                                self.bank_current_record = int(args[2])
+                            
+                            addr = self.bank_current_record * self.bank_record_length
+                            if addr + self.bank_record_length > len(self.bank_memory):
+                                self.variables[err_var] = -1
+                            else:
+                                chunk = text.encode('ascii', 'ignore')[:self.bank_record_length]
+                                self.bank_memory[addr:addr+len(chunk)] = chunk
+                                self.variables[err_var] = self.bank_current_record
+                                self.bank_current_record += 1
+                    elif stmt.command == 'BANKREAD':
+                        # |BANKREAD, @<codigo>, @<cadena> [, <registro>]
+                        args = [self.evaluate(p) for p in stmt.params]
+                        if len(args) >= 2:
+                            err_var = args[0]
+                            str_var = args[1]
+                            if len(args) >= 3:
+                                self.bank_current_record = int(args[2])
+                                
+                            addr = self.bank_current_record * self.bank_record_length
+                            if addr + self.bank_record_length > len(self.bank_memory):
+                                self.variables[err_var] = -1
+                            else:
+                                chunk = self.bank_memory[addr:addr+self.bank_record_length].decode('ascii', 'ignore').rstrip('\x00')
+                                self.variables[str_var] = chunk
+                                self.variables[err_var] = self.bank_current_record
+                                self.bank_current_record += 1
+                    elif stmt.command == 'BANKFIND':
+                        # |BANKFIND, @<codigo>, <cadena> [, <reg_inicio> [, <reg_fin>]]
+                        args = [self.evaluate(p) for p in stmt.params]
+                        if len(args) >= 2:
+                            err_var = args[0]
+                            search = str(args[1])
+                            start_reg = self.bank_current_record
+                            end_reg = (65536 // self.bank_record_length) - 1
+                            if len(args) >= 3:
+                                start_reg = int(args[2])
+                            if len(args) >= 4:
+                                end_reg = int(args[3])
+                                
+                            found = False
+                            for r in range(start_reg, end_reg + 1):
+                                addr = r * self.bank_record_length
+                                if addr + self.bank_record_length > len(self.bank_memory):
+                                    break
+                                chunk = self.bank_memory[addr:addr+self.bank_record_length].decode('ascii', 'ignore')
+                                # Manual says ? can be used as wildcard in search string!
+                                # "La <cadena buscada> puede contener símbolos comodín, que en este caso son caracteres número 0, chr$(0). El número de caracteres que intervienen en las comparaciones es igual a la <longitud de registro> o a la longitud de la <cadena buscada>, el más corto de los dos."
+                                # Actually, ? is chr$(63). But if the user uses chr$(0) or ? as comodín, we could just do a simple match. Let's do a basic find.
+                                # Wait, the manual says "son caracteres número 0, chr$(0)" but the example says "puede escribir ? como simbolo comodin".
+                                # Let's implement a simple wildcard match
+                                search_len = min(len(search), self.bank_record_length)
+                                match = True
+                                for i in range(search_len):
+                                    if search[i] != '\x00' and search[i] != '?' and i < len(chunk) and search[i] != chunk[i]:
+                                        match = False
+                                        break
+                                if match:
+                                    self.variables[err_var] = r
+                                    self.bank_current_record = r
+                                    found = True
+                                    break
+                            if not found:
+                                self.variables[err_var] = -3
+
                 elif isinstance(stmt, InkStatement):
                     pen = int(self.evaluate(stmt.pen))
                     color1 = int(self.evaluate(stmt.color1))
@@ -516,12 +741,41 @@ class Interpreter:
                     self.display.set_ink(pen, color1, color2)
 
                 elif isinstance(stmt, PenStatement):
-                    pen = int(self.evaluate(stmt.pen))
-                    self.display.set_pen(pen)
+                    if stmt.pen is not None:
+                        pen = int(self.evaluate(stmt.pen))
+                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                        self.display.set_pen(pen, stream)
+                    if getattr(stmt, 'bg_mode', None) is not None:
+                        bg_mode = int(self.evaluate(stmt.bg_mode))
+                        self.display.set_bg_mode(bg_mode)
 
                 elif isinstance(stmt, PaperStatement):
                     paper = int(self.evaluate(stmt.paper))
-                    self.display.set_paper(paper)
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                    self.display.set_paper(paper, stream)
+                    
+                elif type(stmt).__name__ == 'GraphicsPenStatement':
+                    if stmt.pen is not None:
+                        pen = int(self.evaluate(stmt.pen))
+                        self.display.set_graphics_pen(pen)
+                    if stmt.bg_mode is not None:
+                        bg_mode = int(self.evaluate(stmt.bg_mode))
+                        self.display.set_bg_mode(bg_mode)
+
+                elif type(stmt).__name__ == 'GraphicsPaperStatement':
+                    paper = int(self.evaluate(stmt.paper))
+                    self.display.set_graphics_paper(paper)
+
+                elif isinstance(stmt, SpeedStatement):
+                    if stmt.type_ == 'INK':
+                        if len(stmt.params) >= 2:
+                            t1 = int(self.evaluate(stmt.params[0]))
+                            t2 = int(self.evaluate(stmt.params[1]))
+                            self.display.set_speed_ink(t1, t2)
+                        elif len(stmt.params) == 1:
+                            t1 = int(self.evaluate(stmt.params[0]))
+                            self.display.set_speed_ink(t1, t1)
+                    # KEY speed is ignored for now
 
                 elif isinstance(stmt, EnvStatement):
                     env_no = int(self.evaluate(stmt.env_no))
@@ -572,7 +826,7 @@ class Interpreter:
                     end_val = self.evaluate(stmt.end_expr)
                     step_val = self.evaluate(stmt.step_expr)
                     
-                    self.variables[stmt.identifier] = start_val
+                    self.variables[stmt.identifier] = self.typecast(stmt.identifier, start_val)
                     self.for_loops[stmt.identifier] = (next_pc, end_val, step_val)
                     if stmt.identifier in self.for_stack:
                         self.for_stack.remove(stmt.identifier)
@@ -583,7 +837,14 @@ class Interpreter:
                         if self.data_ptr < len(self.data_values):
                             _, val_expr = self.data_values[self.data_ptr]
                             val = self.evaluate(val_expr)
-                            self.variables[var] = val
+                            if isinstance(var, tuple):
+                                var_name, dims = var
+                                dims_eval = tuple(int(self.evaluate(d)) for d in dims)
+                                if var_name not in self.arrays:
+                                    self.arrays[var_name] = {}
+                                self.arrays[var_name][dims_eval] = val
+                            else:
+                                self.variables[var] = self.typecast(var, val)
                             self.data_ptr += 1
                         else:
                             print(f"DATA exhausted at {self.pc}")
@@ -603,6 +864,47 @@ class Interpreter:
                             self.data_ptr = len(self.data_values)
                     else:
                         self.data_ptr = 0
+
+                elif type(stmt).__name__ == 'DefTypeStatement':
+                    for start_char, end_char in stmt.ranges:
+                        for char_code in range(ord(start_char), ord(end_char) + 1):
+                            if stmt.type_name == 'DEFINT':
+                                self.default_types[chr(char_code)] = 'INT'
+                            elif stmt.type_name == 'DEFREAL':
+                                self.default_types[chr(char_code)] = 'REAL'
+                            elif stmt.type_name == 'DEFSTR':
+                                self.default_types[chr(char_code)] = 'STR'
+
+                elif type(stmt).__name__ == 'DiStatement':
+                    self.interrupts_enabled = False
+
+                elif type(stmt).__name__ == 'EiStatement':
+                    self.interrupts_enabled = True
+
+                elif type(stmt).__name__ == 'DefFnStatement':
+                    # We store a lambda that evaluates the expression when called
+                    # To capture current context, we use a default arg or just reference self
+                    # We need to map parameters to variables temporarily when called
+                    def create_fn(params, expr):
+                        def fn(*args):
+                            # Save old variable values
+                            old_vars = {}
+                            for i, param in enumerate(params):
+                                if i < len(args):
+                                    old_vars[param] = self.variables.get(param, 0)
+                                    self.variables[param] = args[i]
+                            
+                            # Evaluate
+                            result = self.evaluate(expr)
+                            
+                            # Restore old variable values
+                            for param, old_val in old_vars.items():
+                                self.variables[param] = old_val
+                                
+                            return result
+                        return fn
+                        
+                    self.user_functions[stmt.name.upper()] = create_fn(stmt.params, stmt.expr)
 
                 elif isinstance(stmt, StopStatement):
                     print("STOP at line", self.pc)
@@ -627,6 +929,9 @@ class Interpreter:
 
                 elif isinstance(stmt, FrameStatement):
                     if 'pygame' in sys.modules:
+                        if hasattr(self, 'display'):
+                            self.display.update()
+                            self.last_update = pygame.time.get_ticks()
                         pygame.time.wait(20)
 
                 elif isinstance(stmt, SymbolStatement):
@@ -643,8 +948,9 @@ class Interpreter:
                     right = int(self.evaluate(stmt.right))
                     top = int(self.evaluate(stmt.top))
                     bottom = int(self.evaluate(stmt.bottom))
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
                     if hasattr(self.display, 'set_window'):
-                        self.display.set_window(left, right, top, bottom)
+                        self.display.set_window(left, right, top, bottom, stream)
 
                 elif isinstance(stmt, PokeStatement):
                     addr = int(self.evaluate(stmt.address)) & 0xFFFF

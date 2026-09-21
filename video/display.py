@@ -61,6 +61,19 @@ class Display:
         
         self.current_pen = 1
         self.current_paper = 0
+        self.graphics_pen = 1
+        self.graphics_paper = 0
+        self.bg_mode = 0
+        
+        self.speed_ink_1 = 10 * 20  # 200ms
+        self.speed_ink_2 = 10 * 20  # 200ms
+        
+        self.line_mask = 255
+        self.mask_first = 1
+        
+        self.esc_state = 0
+        self.esc_cmd = ''
+        self.esc_args = []
         
         self._update_palette(False)
         self.logical_surface.fill(self.current_paper)
@@ -76,8 +89,7 @@ class Display:
         except Exception:
             self.font = pygame.font.SysFont('courier', 16, bold=True)
             
-        self.text_col = 1
-        self.text_row = 1
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
         self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
         
         self.key_buffer = []
@@ -135,25 +147,47 @@ class Display:
             else:
                 self.border_color2 = None
 
-    def set_pen(self, pen):
+    def set_pen(self, pen, stream=0):
         if 0 <= pen < 16:
             self.current_pen = pen
+            if hasattr(self, 'streams') and stream in self.streams: self.streams[stream]['pen'] = pen
 
-    def set_paper(self, paper):
+    def set_paper(self, paper, stream=0):
         if 0 <= paper < 16:
             self.current_paper = paper
+            if hasattr(self, 'streams') and stream in self.streams: self.streams[stream]['paper'] = paper
 
-    def get_text_window(self):
-        if hasattr(self, 'text_window') and self.text_window is not None:
-            return self.text_window
+    def set_graphics_pen(self, pen):
+        if 0 <= pen < 16:
+            self.graphics_pen = pen
+            
+    def set_graphics_paper(self, paper):
+        if 0 <= paper < 16:
+            self.graphics_paper = paper
+            
+    def set_bg_mode(self, mode):
+        if mode in (0, 1):
+            self.bg_mode = mode
+
+    def set_mask(self, mask):
+        self.line_mask = mask & 255
+
+    def set_mask_first(self, first):
+        self.mask_first = 1 if first else 0
+
+    def get_text_window(self, stream=0):
+        if hasattr(self, 'streams') and stream in self.streams and self.streams[stream]['text_window'] is not None:
+            return self.streams[stream]['text_window']
         return (1, self.get_max_cols(), 1, 25)
 
-    def set_window(self, left, right, top, bottom):
-        self.text_window = (left, right, top, bottom)
-        self.locate(1, 1)
+    def set_window(self, left, right, top, bottom, stream=0):
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen}
+        self.streams[stream]['text_window'] = (left, right, top, bottom)
+        self.locate(1, 1, stream)
 
-    def clear_graphics(self):
-        left, right, top, bottom = self.get_text_window()
+    def clear_graphics(self, stream=0):
+        left, right, top, bottom = self.get_text_window(stream)
         max_cols = self.get_max_cols()
         char_width = self.logical_width // max_cols
         char_height = 16
@@ -164,7 +198,8 @@ class Display:
         ph = (bottom - top + 1) * char_height
         
         rect = pygame.Rect(px, py, pw, ph)
-        pygame.draw.rect(self.logical_surface, self.current_paper, rect)
+        paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+        pygame.draw.rect(self.logical_surface, paper, rect)
         
         for r in range(top - 1, bottom):
             for c in range(left - 1, right):
@@ -174,44 +209,166 @@ class Display:
         self.locate(1, 1)
 
     def copychr(self, stream=0):
-        left, right, top, bottom = self.get_text_window()
-        abs_col = left + self.text_col - 1
-        abs_row = top + self.text_row - 1
+        left, right, top, bottom = self.get_text_window(stream)
+        abs_col = left + self.streams[stream]["text_col"] - 1
+        abs_row = top + self.streams[stream]["text_row"] - 1
         if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
             return self.text_buffer[abs_row - 1][abs_col - 1]
         return ' '
         
-    def locate(self, col, row):
-        self.text_col = col
-        self.text_row = row
+    def locate(self, col, row, stream=0):
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen}
+        self.streams[stream]['text_col'] = col
+        self.streams[stream]['text_row'] = row
 
     def get_max_cols(self):
         if self.mode == 0: return 20
         elif self.mode == 1: return 40
         else: return 80
 
-    def print_text(self, text):
+    def _clear_area(self, start_col, end_col, start_row, end_row, stream=0):
+        left, right, top, bottom = self.get_text_window(stream)
         max_cols = self.get_max_cols()
         char_width = self.logical_width // max_cols
         char_height = 16
         
-        left, right, top, bottom = self.get_text_window()
+        for r in range(start_row, end_row + 1):
+            for c in range(start_col, end_col + 1):
+                px = (left + c - 2) * char_width
+                py = (top + r - 2) * char_height
+                rect = pygame.Rect(px, py, char_width, char_height)
+                paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+                pygame.draw.rect(self.logical_surface, paper, rect)
+                abs_c = left + c - 2
+                abs_r = top + r - 2
+                if 0 <= abs_r < 25 and 0 <= abs_c < 80:
+                    self.text_buffer[abs_r][abs_c] = ' '
+
+    def _clear_to_end_of_line(self, win_cols, stream=0):
+        self._clear_area(self.streams[stream]["text_col"], win_cols, self.streams[stream]["text_row"], self.streams[stream]["text_row"])
+
+    def _clear_to_start_of_line(self, win_cols, stream=0):
+        self._clear_area(1, self.streams[stream]["text_col"], self.streams[stream]["text_row"], self.streams[stream]["text_row"])
+
+    def _clear_to_end_of_screen(self, win_cols, win_rows, stream=0):
+        self._clear_to_end_of_line(win_cols, stream)
+        if self.streams[stream]["text_row"] < win_rows:
+            self._clear_area(1, win_cols, self.streams[stream]["text_row"] + 1, win_rows)
+
+    def _clear_to_start_of_screen(self, win_cols, win_rows, stream=0):
+        self._clear_to_start_of_line(win_cols, stream)
+        if self.streams[stream]["text_row"] > 1:
+            self._clear_area(1, win_cols, 1, self.streams[stream]["text_row"] - 1)
+
+    def _insert_line(self, win_cols, win_rows, stream=0):
+        if self.streams[stream]["text_row"] > win_rows: return
+        left, right, top, bottom = self.get_text_window(stream)
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        px = (left - 1) * char_width
+        py = (top + self.streams[stream]["text_row"] - 2) * char_height
+        pw = win_cols * char_width
+        ph = (win_rows - self.streams[stream]["text_row"] + 1) * char_height
+        sub = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
+        sub.scroll(0, char_height)
+        self._clear_area(1, win_cols, self.streams[stream]["text_row"], self.streams[stream]["text_row"])
+
+    def _delete_line(self, win_cols, win_rows, stream=0):
+        if self.streams[stream]["text_row"] > win_rows: return
+        left, right, top, bottom = self.get_text_window(stream)
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        px = (left - 1) * char_width
+        py = (top + self.streams[stream]["text_row"] - 2) * char_height
+        pw = win_cols * char_width
+        ph = (win_rows - self.streams[stream]["text_row"] + 1) * char_height
+        sub = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
+        sub.scroll(0, -char_height)
+        self._clear_area(1, win_cols, win_rows, win_rows)
+
+    def _delete_char(self, win_cols, stream=0):
+        if self.streams[stream]["text_col"] > win_cols: return
+        left, right, top, bottom = self.get_text_window(stream)
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        px = (left + self.streams[stream]["text_col"] - 2) * char_width
+        py = (top + self.streams[stream]["text_row"] - 2) * char_height
+        pw = (win_cols - self.streams[stream]["text_col"] + 1) * char_width
+        sub = self.logical_surface.subsurface(pygame.Rect(px, py, pw, char_height))
+        sub.scroll(-char_width, 0)
+        self._clear_area(win_cols, win_cols, self.streams[stream]["text_row"], self.streams[stream]["text_row"])
+
+    def print_text(self, text, stream=0):
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        
+        left, right, top, bottom = self.get_text_window(stream)
         win_cols = right - left + 1
         win_rows = bottom - top + 1
         
         for char in str(text):
-            if char == '\n':
-                self.text_col = 1
-                self.text_row += 1
+            char_code = ord(char)
+            
+            if self.esc_state > 0:
+                # We reuse esc_state for multi-byte VDU commands
+                if self.esc_state == 14: # PAPER
+                    self.set_paper(char_code % 16, stream)
+                    self.esc_state = 0
+                elif self.esc_state == 15: # PEN
+                    self.set_pen(char_code % 16, stream)
+                    self.esc_state = 0
+                elif self.esc_state == 31: # LOCATE
+                    self.esc_args.append(char_code)
+                    if len(self.esc_args) == 2:
+                        self.locate(max(1, min(win_cols, self.esc_args[0])), max(1, min(win_rows, self.esc_args[1])), stream)
+                        self.esc_state = 0
+                continue
+                
+            if char_code < 32:
+                if char_code == 7: # BEL
+                    continue
+                elif char_code == 8: # BS (Left)
+                    self.streams[stream]["text_col"] = max(1, self.streams[stream]["text_col"] - 1)
+                elif char_code == 9: # TAB (Right)
+                    self.streams[stream]["text_col"] = min(win_cols, self.streams[stream]["text_col"] + 1)
+                elif char_code == 10: # LF (Down)
+                    self.streams[stream]["text_row"] += 1
+                    if self.streams[stream]["text_row"] > win_rows: self.streams[stream]["text_row"] = win_rows
+                elif char_code == 11: # VT (Up)
+                    self.streams[stream]["text_row"] = max(1, self.streams[stream]["text_row"] - 1)
+                elif char_code == 12: # FF (Clear Window)
+                    self.clear_graphics(stream) # Text clear
+                elif char_code == 13: # CR (Left edge)
+                    self.streams[stream]["text_col"] = 1
+                elif char_code == 14: # Set Paper
+                    self.esc_state = 14
+                elif char_code == 15: # Set Pen
+                    self.esc_state = 15
+                elif char_code == 24: # CAN (Inverse Video)
+                    if hasattr(self, 'streams') and stream in self.streams:
+                        tmp = self.streams[stream]['pen']
+                        self.streams[stream]['pen'] = self.streams[stream]['paper']
+                        self.streams[stream]['paper'] = tmp
+                    else:
+                        tmp = self.current_pen; self.current_pen = self.current_paper; self.current_paper = tmp
+                elif char_code == 31: # US (Locate)
+                    self.esc_state = 31
+                    self.esc_args = []
+                # Rest of control codes ignored
+                continue
             else:
-                char_code = ord(char)
                 
                 if self.tag_active:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
                     y -= char_height
                 else:
-                    abs_col = left + self.text_col - 1
-                    abs_row = top + self.text_row - 1
+                    abs_col = left + self.streams[stream]["text_col"] - 1
+                    abs_row = top + self.streams[stream]["text_row"] - 1
                     x = (abs_col - 1) * char_width
                     y = (abs_row - 1) * char_height
                 
@@ -250,13 +407,13 @@ class Display:
                 else:
                     if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
                         self.text_buffer[abs_row - 1][abs_col - 1] = char
-                    self.text_col += 1
+                    self.streams[stream]["text_col"] += 1
                 
-            if self.text_col > win_cols:
-                self.text_col = 1
-                self.text_row += 1
+            if self.streams[stream]["text_col"] > win_cols:
+                self.streams[stream]["text_col"] = 1
+                self.streams[stream]["text_row"] += 1
                 
-            if self.text_row > win_rows:
+            if self.streams[stream]["text_row"] > win_rows:
                 px = (left - 1) * char_width
                 py = (top - 1) * char_height
                 pw = win_cols * char_width
@@ -266,9 +423,10 @@ class Display:
                 subsurface.scroll(0, -char_height)
                 
                 bottom_rect = pygame.Rect(px, py + ph - char_height, pw, char_height)
-                pygame.draw.rect(self.logical_surface, self.current_paper, bottom_rect)
+                paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+                pygame.draw.rect(self.logical_surface, paper, bottom_rect)
                 
-                self.text_row = win_rows
+                self.streams[stream]["text_row"] = win_rows
                 
     def _cpc_to_screen(self, x, y):
         screen_x = self.origin_x + x
@@ -281,7 +439,7 @@ class Display:
 
     def plot(self, x, y, pen=None):
         if pen is None:
-            pen = self.current_pen
+            pen = self.graphics_pen
         self.move(x, y)
         sx, sy = self._cpc_to_screen(x, y)
         
@@ -297,7 +455,7 @@ class Display:
 
     def draw(self, x, y, pen=None):
         if pen is None:
-            pen = self.current_pen
+            pen = self.graphics_pen
             
         start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
         end_x, end_y = self._cpc_to_screen(x, y)
@@ -305,8 +463,46 @@ class Display:
         if self.mode == 0: width = 4
         elif self.mode == 1: width = 2
         else: width = 1
+        
+        if self.line_mask == 255 and self.mask_first == 1:
+            pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
+        else:
+            dx = abs(end_x - start_x)
+            dy = abs(end_y - start_y)
+            sx = 1 if start_x < end_x else -1
+            sy = 1 if start_y < end_y else -1
+            err = dx - dy
             
-        pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
+            cx, cy = start_x, start_y
+            bit_idx = 7
+            first = True
+            
+            while True:
+                draw_dot = False
+                if first:
+                    draw_dot = (self.mask_first == 1)
+                    first = False
+                else:
+                    draw_dot = (self.line_mask & (1 << bit_idx)) != 0
+                    bit_idx = (bit_idx - 1) % 8
+                    
+                if draw_dot:
+                    rect = pygame.Rect(cx, cy, width, 2)
+                    pygame.draw.rect(self.logical_surface, pen, rect)
+                elif self.bg_mode == 0:
+                    rect = pygame.Rect(cx, cy, width, 2)
+                    pygame.draw.rect(self.logical_surface, self.graphics_paper, rect)
+                    
+                if cx == end_x and cy == end_y:
+                    break
+                e2 = 2 * err
+                if e2 > -dy:
+                    err -= dy
+                    cx += sx
+                if e2 < dx:
+                    err += dx
+                    cy += sy
+                    
         self.move(x, y)
 
     def fill(self, pen=None):
@@ -351,26 +547,92 @@ class Display:
         self.process_events()
         keys = pygame.key.get_pressed()
         
-        # Mapeo de teclas de hardware comunes de Amstrad CPC a Pygame
+        # Mapeo de teclas de hardware del Amstrad CPC a Pygame
+        # Valores extraídos de 'varios.pdf' Parte 5: Esquemas del teclado
         cpc_to_pygame = {
+            # Teclas especiales
             47: pygame.K_SPACE,
-            77: pygame.K_LEFT,
-            79: pygame.K_RIGHT,
-            78: pygame.K_DOWN,
-            76: pygame.K_UP,
-            9:  pygame.K_RETURN,
-            18: pygame.K_KP_ENTER,
+            18: pygame.K_RETURN,
+            14: pygame.K_KP_ENTER,
             66: pygame.K_ESCAPE,
-            8:  pygame.K_BACKSPACE,
-            # Se pueden añadir más letras de la matriz según se necesiten
+            16: pygame.K_BACKSPACE, # DEL en CPC
+            15: pygame.K_DELETE,    # CLR en CPC
+            
+            # Cursores
+            0:  pygame.K_UP,
+            2:  pygame.K_DOWN,
+            8:  pygame.K_LEFT,
+            1:  pygame.K_RIGHT,
+            
+            # Joystick 0 (a menudo leído vía INKEY en juegos)
+            72: pygame.K_UP,
+            73: pygame.K_DOWN,
+            74: pygame.K_LEFT,
+            75: pygame.K_RIGHT,
+            76: pygame.K_x,     # Fire 1
+            77: pygame.K_z,     # Fire 2
         }
         
         if cpc_key in cpc_to_pygame:
             return 0 if keys[cpc_to_pygame[cpc_key]] else -1
         return -1
 
+    def set_speed_ink(self, time1, time2):
+        self.speed_ink_1 = max(1, time1 * 20)
+        self.speed_ink_2 = max(1, time2 * 20)
+
+    def _get_screen(self, num):
+        if num == 1:
+            return self.logical_surface
+        if not hasattr(self, 'extra_screens'):
+            self.extra_screens = {}
+        if num not in self.extra_screens:
+            self.extra_screens[num] = pygame.Surface((self.logical_width, self.logical_height))
+            self.extra_screens[num].fill(self.current_paper)
+        return self.extra_screens[num]
+
+    def _set_screen(self, num, surface):
+        if num == 1:
+            self.logical_surface = surface
+        else:
+            if not hasattr(self, 'extra_screens'):
+                self.extra_screens = {}
+            self.extra_screens[num] = surface
+
+    def screencopy(self, dest, src, section=None):
+        src_surf = self._get_screen(src)
+        dest_surf = self._get_screen(dest)
+        if section is None:
+            dest_surf.blit(src_surf, (0, 0))
+        else:
+            # CPC screen has 16KB. 1/64 is 256 bytes. We map it to horizontal slices.
+            slice_h = max(1, self.logical_height // 64)
+            y = section * slice_h
+            rect = pygame.Rect(0, y, self.logical_width, slice_h)
+            dest_surf.blit(src_surf, (0, y), rect)
+
+    def screenswap(self, s1, s2, section=None):
+        if section is None:
+            surf1 = self._get_screen(s1)
+            surf2 = self._get_screen(s2)
+            self._set_screen(s1, surf2)
+            self._set_screen(s2, surf1)
+        else:
+            # For a section, we must copy back and forth
+            surf1 = self._get_screen(s1)
+            surf2 = self._get_screen(s2)
+            slice_h = max(1, self.logical_height // 64)
+            y = section * slice_h
+            rect = pygame.Rect(0, y, self.logical_width, slice_h)
+            tmp = pygame.Surface((self.logical_width, slice_h))
+            tmp.blit(surf1, (0, 0), rect)
+            surf1.blit(surf2, (0, y), rect)
+            surf2.blit(tmp, (0, y))
+
     def update(self):
-        flash_state = (pygame.time.get_ticks() // 300) % 2 == 1
+        total_time = self.speed_ink_1 + self.speed_ink_2
+        current_phase = pygame.time.get_ticks() % total_time
+        flash_state = current_phase >= self.speed_ink_1
         self._update_palette(flash_state)
         
         active_border = self.border_color2 if flash_state and self.border_color2 is not None else self.border_color1
@@ -389,6 +651,11 @@ class Display:
                 if event.unicode:
                     self.key_buffer.append(event.unicode)
 
+    def clear_input(self):
+        self.key_buffer.clear()
+        pygame.event.clear(pygame.KEYDOWN)
+        pygame.event.clear(pygame.KEYUP)
+
     def input_string(self):
         input_str = ""
         while True:
@@ -404,15 +671,15 @@ class Display:
                     elif event.key == pygame.K_BACKSPACE:
                         if len(input_str) > 0:
                             input_str = input_str[:-1]
-                            self.text_col -= 1
-                            if self.text_col < 1:
-                                self.text_col = self.get_max_cols()
-                                self.text_row -= 1
+                            self.streams[stream]["text_col"] -= 1
+                            if self.streams[stream]["text_col"] < 1:
+                                self.streams[stream]["text_col"] = self.get_max_cols()
+                                self.streams[stream]["text_row"] -= 1
                             self.print_text(' ')
-                            self.text_col -= 1
-                            if self.text_col < 1:
-                                self.text_col = self.get_max_cols()
-                                self.text_row -= 1
+                            self.streams[stream]["text_col"] -= 1
+                            if self.streams[stream]["text_col"] < 1:
+                                self.streams[stream]["text_col"] = self.get_max_cols()
+                                self.streams[stream]["text_row"] -= 1
                             self.update()
                     elif event.unicode and ord(event.unicode) >= 32:
                         input_str += event.unicode

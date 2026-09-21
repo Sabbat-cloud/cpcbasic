@@ -1,0 +1,11 @@
+10 CLS
+20 PRINT "Vamos a hacer una prueba con CLEAR INPUT."
+30 PRINT "Escribe todo lo que quieras a lo loco en el teclado AHORA..."
+40 t0 = TIME
+50 IF TIME < t0 + 900 THEN GOTO 50
+60 PRINT "¡Tiempo agotado!"
+70 PRINT "Borrando todo lo que has escrito usando CLEAR INPUT..."
+80 CLEAR INPUT
+90 PRINT "El buffer esta limpio."
+100 INPUT "Por favor, dime tu nombre real: "; nombre$
+110 PRINT "Hola, "; nombre$; ". Como puedes ver, lo que escribiste a lo loco no ha aparecido."

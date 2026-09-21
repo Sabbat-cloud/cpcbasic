@@ -19,7 +19,7 @@ KEYWORDS = {
     'REM', 'INPUT', 'SYMBOL', 'FRAME', 'MASK', 'ZONE', 'WINDOW', 'TRON', 'TROFF', 'TAG', 'TAGOFF',
     'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS',
     'RANDOMIZE', 'DEG', 'RAD', 'FILL', 'ERASE', 'EVERY', 'AFTER',
-    'POKE', 'PEEK', 'JOY'
+    'POKE', 'PEEK', 'JOY', 'DEF', 'DI', 'EI', 'GRAPHICS', 'USING'
 }
 
 token_specification = [
@@ -27,7 +27,7 @@ token_specification = [
     ('NUMBER',   r'\d+(\.\d*)?([eE][+-]?\d+)?'), 
     ('STRING',   r'".*?"'),                
     ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_]*[%!\$]?'), 
-    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#]'), 
+    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@]'), 
     ('NEWLINE',  r'\n'),                   
     ('SKIP',     r'[ \t\r]+'),               
     ('MISMATCH', r'.'),                    
@@ -47,7 +47,27 @@ class Token:
 
 class Lexer:
     def __init__(self, code):
-        self.code = code
+        # Fix common PDF copy-paste artifacts
+        code = code.replace('—', '-').replace('–', '-')
+        code = code.replace('“', '"').replace('”', '"')
+        code = code.replace('‘', "'").replace('’', "'")
+        
+        # Auto-join wrapped lines that don't start with a line number
+        lines = code.split('\n')
+        fixed_lines = []
+        for line in lines:
+            if not line.strip():
+                continue
+            if line.lstrip()[0].isdigit():
+                fixed_lines.append(line.rstrip('\r'))
+            else:
+                if fixed_lines:
+                    # Append to previous line
+                    fixed_lines[-1] += " " + line.strip('\r')
+                else:
+                    fixed_lines.append(line.rstrip('\r'))
+        
+        self.code = '\n'.join(fixed_lines)
         self.tokens = []
         self.tokenize()
 

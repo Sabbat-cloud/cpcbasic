@@ -1,0 +1,3 @@
+10 DEFINT n
+20 numero=123.456
+30 PRINT numero

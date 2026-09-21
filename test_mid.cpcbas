@@ -1,0 +1,7 @@
+10 a$ = "HELLO"
+20 MID$(a$, 2, 2) = "??"
+30 PRINT a$
+40 MID$(a$, 5, 1) = "!"
+50 PRINT a$
+60 MID$(a$, 1, 1) = "W"
+70 PRINT a$

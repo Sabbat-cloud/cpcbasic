@@ -1,0 +1,7 @@
+10 t=TIME/300
+20 DEF FNreloj=INT(TIME/300-t)
+30 EVERY 10 GOSUB 50
+40 GOTO 40
+50 PRINT "el programa se ejecuto hace";
+60 PRINT FNreloj;"segundos"
+70 RETURN

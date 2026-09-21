@@ -58,6 +58,17 @@ class RestoreStatement(Statement):
     def __init__(self, line_number=None):
         self.line_number = line_number
 
+class DefTypeStatement(Statement):
+    def __init__(self, type_name, ranges):
+        self.type_name = type_name
+        self.ranges = ranges
+
+class DefFnStatement(Statement):
+    def __init__(self, name, params, expr):
+        self.name = name
+        self.params = params
+        self.expr = expr
+
 class InputStatement(Statement):
     def __init__(self, prompt, variables):
         self.prompt = prompt
@@ -74,12 +85,19 @@ class FrameStatement(Statement):
 class StopStatement(Statement):
     pass
 
+class DiStatement(Statement):
+    pass
+
+class EiStatement(Statement):
+    pass
+
 class WindowStatement(Statement):
-    def __init__(self, left, right, top, bottom):
+    def __init__(self, left, right, top, bottom, stream=None):
         self.left = left
         self.right = right
         self.top = top
         self.bottom = bottom
+        self.stream = stream
 
 class WhileStatement(Statement):
     def __init__(self, condition):
@@ -115,6 +133,19 @@ class MaskStatement(Statement):
     def __init__(self, mask, first_point=None):
         self.mask = mask
         self.first_point = first_point
+
+class CallStatement(Statement):
+    def __init__(self, address, params):
+        self.address = address
+        self.params = params
+
+class RsxStatement(Statement):
+    def __init__(self, command, params):
+        self.command = command
+        self.params = params
+
+class OnErrorStatement(Statement):
+    pass
 
 class PokeStatement(Statement):
     def __init__(self, address, value):
@@ -173,16 +204,18 @@ class PlotStatement(Statement):
         self.pen = pen
 
 class DrawStatement(Statement):
-    def __init__(self, x, y, pen=None):
+    def __init__(self, x, y, pen=None, mode=None):
         self.x = x
         self.y = y
         self.pen = pen
+        self.mode = mode
 
 class DrawrStatement(Statement):
-    def __init__(self, x, y, pen=None):
+    def __init__(self, x, y, pen=None, mode=None):
         self.x = x
         self.y = y
         self.pen = pen
+        self.mode = mode
 
 class MoveStatement(Statement):
     def __init__(self, x, y, pen=None, mode=None):
@@ -214,20 +247,34 @@ class InkStatement(Statement):
         self.color2 = color2
 
 class PenStatement(Statement):
-    def __init__(self, pen):
+    def __init__(self, pen, bg_mode=None, stream=None):
         self.pen = pen
+        self.bg_mode = bg_mode
+        self.stream = stream
         
 class PaperStatement(Statement):
+    def __init__(self, paper, stream=None):
+        self.paper = paper
+        self.stream = stream
+
+class GraphicsPenStatement(Statement):
+    def __init__(self, pen, bg_mode=None):
+        self.pen = pen
+        self.bg_mode = bg_mode
+
+class GraphicsPaperStatement(Statement):
     def __init__(self, paper):
         self.paper = paper
 
 class LocateStatement(Statement):
-    def __init__(self, col, row):
+    def __init__(self, col, row, stream=None):
         self.col = col
         self.row = row
+        self.stream = stream
 
 class ClsStatement(Statement):
-    pass
+    def __init__(self, stream=None):
+        self.stream = stream
 
 class ClgStatement(Statement):
     pass
@@ -362,11 +409,20 @@ class Parser:
         if self.current_token.type == KEYWORD:
             if self.current_token.value == 'PRINT':
                 self.eat(KEYWORD)
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # stream
+                    stream = self.parse_expression()
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
+                
+                using_fmt = None
+                if self.current_token.type == KEYWORD and self.current_token.value == 'USING':
+                    self.eat(KEYWORD)
+                    using_fmt = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ';':
+                        self.eat(SYMBOL)
+
                 exprs = []
                 while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
                     if self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
@@ -378,7 +434,11 @@ class Parser:
                             exprs.append(expr)
                         else:
                             break
-                return PrintStatement(exprs)
+                # Monkey-patch stream and using_fmt into PrintStatement for interpreter
+                stmt = PrintStatement(exprs)
+                stmt.stream = stream
+                stmt.using_fmt = using_fmt
+                return stmt
             
             elif self.current_token.value == 'POKE':
                 self.eat(KEYWORD)
@@ -458,9 +518,41 @@ class Parser:
                 self.eat(KEYWORD)
                 values = []
                 while True:
-                    expr = self.parse_expression()
-                    if expr is not None:
-                        values.append(expr)
+                    if self.current_token.type in (EOF, NEWLINE) or (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                        break
+                    
+                    tokens = []
+                    while self.current_token.type not in (EOF, NEWLINE) and not (self.current_token.type == SYMBOL and self.current_token.value in (',', ':')):
+                        tokens.append(self.current_token)
+                        self.pos += 1
+                        if self.pos < len(self.tokens):
+                            self.current_token = self.tokens[self.pos]
+                    
+                    if tokens:
+                        if len(tokens) == 1 and tokens[0].type == STRING:
+                            values.append(Literal(tokens[0].value, STRING))
+                        else:
+                            # Reconstruct string, preserving spaces using token columns
+                            s = ""
+                            last_col = -1
+                            is_num = True
+                            for t in tokens:
+                                if last_col != -1 and t.column > last_col:
+                                    s += " " * (t.column - last_col)
+                                s += str(t.value)
+                                last_col = t.column + len(str(t.value))
+                                if t.type not in (NUMBER, HEX_NUMBER) and not (t.type == SYMBOL and t.value in ('+', '-', '.')):
+                                    is_num = False
+                            
+                            if is_num:
+                                try:
+                                    float(s)
+                                    values.append(Literal(s, NUMBER))
+                                except ValueError:
+                                    values.append(Literal(s, STRING))
+                            else:
+                                values.append(Literal(s, STRING))
+                    
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                     else:
@@ -472,8 +564,21 @@ class Parser:
                 variables = []
                 while True:
                     if self.current_token.type == IDENTIFIER:
-                        variables.append(self.current_token.value)
+                        var_name = self.current_token.value
                         self.eat(IDENTIFIER)
+                        if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                            self.eat(SYMBOL)
+                            dims = []
+                            while True:
+                                dims.append(self.parse_expression())
+                                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                                    self.eat(SYMBOL)
+                                else:
+                                    break
+                            self.eat(SYMBOL) # )
+                            variables.append((var_name, dims))
+                        else:
+                            variables.append(var_name)
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                     else:
@@ -530,12 +635,12 @@ class Parser:
 
             elif self.current_token.value == 'WINDOW':
                 self.eat(KEYWORD)
-                # optionally #channel,
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # channel
+                    stream = self.parse_expression()
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
-                        self.eat(SYMBOL) # ,
+                        self.eat(SYMBOL)
                 left = self.parse_expression()
                 self.eat(SYMBOL)
                 right = self.parse_expression()
@@ -543,7 +648,7 @@ class Parser:
                 top = self.parse_expression()
                 self.eat(SYMBOL)
                 bottom = self.parse_expression()
-                return WindowStatement(left, right, top, bottom)
+                return WindowStatement(left, right, top, bottom, stream)
 
             elif self.current_token.value == 'IF':
                 self.eat(KEYWORD)
@@ -560,11 +665,16 @@ class Parser:
                     then_stmts.append(GotoStatement(line_num))
                 else:
                     while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == KEYWORD and self.current_token.value == 'ELSE'):
+                        prev_pos = self.pos
                         stmt = self.parse_statement()
                         if stmt:
                             then_stmts.append(stmt)
                         if self.current_token.type == SYMBOL and self.current_token.value == ':':
                             self.eat(SYMBOL)
+                        if self.pos == prev_pos:
+                            self.pos += 1
+                            if self.pos < len(self.tokens):
+                                self.current_token = self.tokens[self.pos]
                             
                 # Parse ELSE branch
                 if self.current_token.type == KEYWORD and self.current_token.value == 'ELSE':
@@ -574,11 +684,16 @@ class Parser:
                         else_stmts.append(GotoStatement(line_num))
                     else:
                         while self.current_token.type not in (NEWLINE, EOF):
+                            prev_pos = self.pos
                             stmt = self.parse_statement()
                             if stmt:
                                 else_stmts.append(stmt)
                             if self.current_token.type == SYMBOL and self.current_token.value == ':':
                                 self.eat(SYMBOL)
+                            if self.pos == prev_pos:
+                                self.pos += 1
+                                if self.pos < len(self.tokens):
+                                    self.current_token = self.tokens[self.pos]
                 
                 return IfStatement(condition, then_stmts, else_stmts)
 
@@ -638,11 +753,16 @@ class Parser:
 
             elif self.current_token.value == 'MASK':
                 self.eat(KEYWORD)
-                mask = self.parse_expression()
+                mask = None
                 first_point = None
                 if self.current_token.type == SYMBOL and self.current_token.value == ',':
                     self.eat(SYMBOL)
                     first_point = self.parse_expression()
+                else:
+                    mask = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        first_point = self.parse_expression()
                 return MaskStatement(mask, first_point)
 
             elif self.current_token.value == 'TAG':
@@ -733,10 +853,15 @@ class Parser:
                 self.eat(SYMBOL) # ,
                 y = self.parse_expression()
                 pen = None
+                mode = None
                 if self.current_token.type == SYMBOL and self.current_token.value == ',':
                     self.eat(SYMBOL)
-                    pen = self.parse_expression()
-                return DrawStatement(x, y, pen)
+                    if self.current_token.type != SYMBOL or self.current_token.value != ',':
+                        pen = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        mode = self.parse_expression()
+                return DrawStatement(x, y, pen, mode)
 
             elif self.current_token.value == 'DRAWR':
                 self.eat(KEYWORD)
@@ -744,10 +869,15 @@ class Parser:
                 self.eat(SYMBOL) # ,
                 y = self.parse_expression()
                 pen = None
+                mode = None
                 if self.current_token.type == SYMBOL and self.current_token.value == ',':
                     self.eat(SYMBOL)
-                    pen = self.parse_expression()
-                return DrawrStatement(x, y, pen)
+                    if self.current_token.type != SYMBOL or self.current_token.value != ',':
+                        pen = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        mode = self.parse_expression()
+                return DrawrStatement(x, y, pen, mode)
 
             elif self.current_token.value == 'MOVE':
                 self.eat(KEYWORD)
@@ -816,46 +946,111 @@ class Parser:
 
             elif self.current_token.value == 'PEN':
                 self.eat(KEYWORD)
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # stream
+                    stream = self.parse_expression()
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
-                pen = self.parse_expression()
-                return PenStatement(pen)
+                pen = None
+                bg_mode = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    bg_mode = self.parse_expression()
+                else:
+                    pen = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        bg_mode = self.parse_expression()
+                return PenStatement(pen, bg_mode, stream)
 
             elif self.current_token.value == 'PAPER':
                 self.eat(KEYWORD)
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # stream
+                    stream = self.parse_expression()
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                 paper = self.parse_expression()
-                return PaperStatement(paper)
+                return PaperStatement(paper, stream)
+                
+            elif self.current_token.value == 'GRAPHICS':
+                self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'PEN':
+                    self.eat(KEYWORD)
+                    pen = None
+                    bg_mode = None
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        bg_mode = self.parse_expression()
+                    else:
+                        pen = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            bg_mode = self.parse_expression()
+                    return GraphicsPenStatement(pen, bg_mode)
+                elif self.current_token.type == KEYWORD and self.current_token.value == 'PAPER':
+                    self.eat(KEYWORD)
+                    paper = self.parse_expression()
+                    return GraphicsPaperStatement(paper)
 
             elif self.current_token.value == 'LOCATE':
                 self.eat(KEYWORD)
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # stream
+                    stream = self.parse_expression()
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                 col = self.parse_expression()
                 self.eat(SYMBOL) # ,
                 row = self.parse_expression()
-                return LocateStatement(col, row)
+                return LocateStatement(col, row, stream)
 
             elif self.current_token.value == 'CLS':
                 self.eat(KEYWORD)
+                stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)
-                    self.parse_expression() # stream
-                return ClsStatement()
+                    stream = self.parse_expression()
+                return ClsStatement(stream)
 
             elif self.current_token.value == 'CLG':
                 self.eat(KEYWORD)
                 return ClgStatement()
+
+            elif self.current_token.value == 'DI':
+                self.eat(KEYWORD)
+                return DiStatement()
+
+            elif self.current_token.value == 'EI':
+                self.eat(KEYWORD)
+                return EiStatement()
+
+            elif self.current_token.value in ('DEFINT', 'DEFREAL', 'DEFSTR'):
+                type_name = self.current_token.value
+                self.eat(KEYWORD)
+                ranges = []
+                while self.current_token.type == IDENTIFIER:
+                    start_char = self.current_token.value
+                    self.eat(IDENTIFIER)
+                    if self.current_token.type == SYMBOL and self.current_token.value == '-':
+                        self.eat(SYMBOL)
+                        if self.current_token.type == IDENTIFIER:
+                            end_char = self.current_token.value
+                            self.eat(IDENTIFIER)
+                            ranges.append((start_char[0].upper(), end_char[0].upper()))
+                        else:
+                            ranges.append((start_char[0].upper(), start_char[0].upper()))
+                    else:
+                        ranges.append((start_char[0].upper(), start_char[0].upper()))
+                        
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return DefTypeStatement(type_name, ranges)
 
             elif self.current_token.value == 'BORDER':
                 self.eat(KEYWORD)
@@ -865,6 +1060,37 @@ class Parser:
                     self.eat(SYMBOL)
                     color2 = self.parse_expression()
                 return BorderStatement(color1, color2)
+
+            elif self.current_token.value == 'DEF':
+                self.eat(KEYWORD)
+                fn_name = ""
+                if self.current_token.type == IDENTIFIER:
+                    fn_name = self.current_token.value
+                    self.eat(IDENTIFIER)
+                elif self.current_token.type == KEYWORD and self.current_token.value == 'FN':
+                    # Sometimes FN is separated
+                    self.eat(KEYWORD)
+                    if self.current_token.type == IDENTIFIER:
+                        fn_name = "FN" + self.current_token.value
+                        self.eat(IDENTIFIER)
+                        
+                params = []
+                if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                    self.eat(SYMBOL)
+                    while self.current_token.type == IDENTIFIER:
+                        params.append(self.current_token.value)
+                        self.eat(IDENTIFIER)
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                        else:
+                            break
+                    if self.current_token.type == SYMBOL and self.current_token.value == ')':
+                        self.eat(SYMBOL)
+                        
+                if self.current_token.type == SYMBOL and self.current_token.value == '=':
+                    self.eat(SYMBOL)
+                expr = self.parse_expression()
+                return DefFnStatement(fn_name, params, expr)
 
             elif self.current_token.value == 'CLEAR':
                 self.eat(KEYWORD)
@@ -922,14 +1148,38 @@ class Parser:
                     args.append(None)
                     
                 return SoundStatement(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
-                
+        elif self.current_token.type == SYMBOL and self.current_token.value == '|':
+            self.eat(SYMBOL)
+            if self.current_token.type == IDENTIFIER:
+                command = self.current_token.value.upper()
+                self.eat(IDENTIFIER)
+                params = []
+                # Sometimes RSX commands have parameters starting with comma or directly
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    if self.current_token.type == SYMBOL and self.current_token.value == '@':
+                        self.eat(SYMBOL)
+                        if self.current_token.type == IDENTIFIER:
+                            params.append(Literal(self.current_token.value, STRING))
+                            self.eat(IDENTIFIER)
+                        else:
+                            params.append(self.parse_expression())
+                    else:
+                        params.append(self.parse_expression())
+                    
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                    else:
+                        break
+                return RsxStatement(command, params)
             else:
                 # skip unknown statement
                 while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
                     self.pos += 1
                     self.current_token = self.tokens[self.pos]
                 return None
-                
+
         elif self.current_token.type == IDENTIFIER:
             var_name = self.current_token.value
             self.eat(IDENTIFIER)
