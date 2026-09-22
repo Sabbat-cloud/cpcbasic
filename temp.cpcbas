@@ -1,3 +1,0 @@
-10 PRINT "Start"
-20 FOR t=1 TO 50000 : NEXT t
-30 PRINT "End"
