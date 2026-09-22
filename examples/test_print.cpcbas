@@ -1,0 +1,2 @@
+10 C$=CHR$(65)
+20 PRINT " ";C$;:FRAME
