@@ -15,7 +15,8 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement)
+from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
 
@@ -46,6 +47,10 @@ class Interpreter:
         
         self.angle_mode = 'RAD'
         self.tag_active = False
+        
+        self.err_code = 0
+        self.err_line = 0
+        self.error_handler_line = 0
         
         # Virtual 64KB RAM for PEEK/POKE
         self.ram = bytearray(65536)
@@ -87,6 +92,8 @@ class Interpreter:
             "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
             "CREAL": float,
             "CINT": lambda x: int(round(x)),
+            "ERR": lambda: self.err_code,
+            "ERL": lambda: self.err_line,
             "FIX": int,
             "ROUND": lambda x, d=0: round(x, d) if d > 0 else int(round(x, d)),
             "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
@@ -104,7 +111,7 @@ class Interpreter:
             "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
             "MIN": min,
             "EXP": math.exp,
-            "DEC_STR": lambda x, fmt: f"{x:f}"[:len(fmt)] if isinstance(fmt, str) else str(x)
+            "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x)
         }
         
     def get_joy_state(self, joy_id):
@@ -131,8 +138,18 @@ class Interpreter:
             idx = self.line_numbers.index(current_line)
             if idx + 1 < len(self.line_numbers):
                 return self.line_numbers[idx + 1]
-            return None
         except ValueError:
+            pass
+        return None
+
+    def trigger_error(self, code, line_num):
+        self.err_code = code
+        self.err_line = line_num
+        if self.error_handler_line > 0 and self.error_handler_line in self.program.lines:
+            return self.error_handler_line
+        else:
+            print(f"Error {code} in line {line_num}")
+            self.running = False
             return None
 
     def typecast(self, var_name, val):
@@ -180,13 +197,13 @@ class Interpreter:
                 if t.type == 'IDENTIFIER':
                     if t.value.upper() == 'INKEY$':
                         inkey_val = self.display.get_inkey_str()
-                        s += f'"{inkey_val}"'
+                        s += repr(inkey_val)
                     elif t.value.upper() in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
                         s += t.value.upper().replace('$', '_STR')
                     elif t.value.upper() in self.builtins:
                         kw = t.value.upper()
                         s += kw
-                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY"):
+                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL"):
                             if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                 s += "()"
                     elif t.value in self.arrays and i + 1 < len(expr.tokens) and expr.tokens[i+1].value == '(':
@@ -199,7 +216,7 @@ class Interpreter:
                     else:
                         val = self.variables.get(t.value, self.get_default_value(t.value))
                         if isinstance(val, str):
-                            s += f'"{val}"'
+                            s += repr(val)
                         else:
                             s += str(val)
                 elif t.type == 'HEX_NUMBER':
@@ -223,12 +240,12 @@ class Interpreter:
                     elif kw == 'XOR': s += ' ^ '
                     elif kw in self.builtins:
                         s += kw
-                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN"):
+                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL"):
                             if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                 s += "()"
                     else: s += f' {kw} '
                 elif t.type == 'STRING':
-                    s += f'"{t.value}"'
+                    s += repr(t.value)
                 else:
                     s += str(t.value)
                     
@@ -299,7 +316,11 @@ class Interpreter:
             statements = list(self.program.lines.get(self.pc, []))
             next_pc = self.get_next_line(self.pc)
             
-            for stmt in statements:
+            stmt_idx = getattr(self, 'next_stmt_idx', 0)
+            self.next_stmt_idx = 0
+            while stmt_idx < len(statements):
+                stmt = statements[stmt_idx]
+                stmt_idx += 1
                 if isinstance(stmt, PrintStatement):
                     out = []
                     newline = True
@@ -314,7 +335,10 @@ class Interpreter:
                                 newline = False
                         else:
                             evaluated = self.evaluate(expr)
-                            val = str(evaluated)
+                            if isinstance(evaluated, float) and evaluated.is_integer():
+                                val = str(int(evaluated))
+                            else:
+                                val = str(evaluated)
                             if getattr(stmt, 'using_fmt', None):
                                 vals_for_using.append(evaluated)
                             else:
@@ -323,21 +347,12 @@ class Interpreter:
                                 out.append(val)
                             newline = True
                             
-                    out_str = "".join(out)
                     
                     if getattr(stmt, 'using_fmt', None):
                         fmt = str(self.evaluate(stmt.using_fmt))
-                        # Basic substitution for ## and ####
-                        for v in vals_for_using:
-                            # Replace first occurrence of #...# with formatted number
-                            import re
-                            def repl(m):
-                                field = m.group(0)
-                                if isinstance(v, (int, float)):
-                                    return f"{v:>{len(field)}}"
-                                return str(v)[:len(field)]
-                            fmt = re.sub(r'#+', repl, fmt, count=1)
-                        out_str = fmt
+                        out_str = format_cpc_using(vals_for_using, fmt)
+                    else:
+                        out_str = "".join(out)
                         
                     # Print to terminal for logging
                     try:
@@ -529,18 +544,41 @@ class Interpreter:
                             next_pc = target
                             break
                         else:
-                            print(f"Line {target} does not exist!")
-                            self.running = False
+                            next_pc = self.trigger_error(8, self.pc)
                             break
 
+                elif isinstance(stmt, OnErrorStatement):
+                    self.error_handler_line = int(self.evaluate(stmt.line_number))
+                    if self.error_handler_line == 0:
+                        self.error_handler_line = 0 # ON ERROR GOTO 0 disables handler
+                    
+                elif isinstance(stmt, OnSqStatement):
+                    channel = int(self.evaluate(stmt.channel)) if stmt.channel else 1
+                    target_line = int(self.evaluate(stmt.line_number))
+                    # Just map it to a timer for now or stub it
+                    pass
+
+                elif isinstance(stmt, ErrorStatement):
+                    code = int(self.evaluate(stmt.code))
+                    next_pc = self.trigger_error(code, self.pc)
+                    break
+                    
+                elif isinstance(stmt, ResumeStatement):
+                    if stmt.is_next:
+                        next_pc = self.get_next_line(self.pc)
+                    elif stmt.line_number is not None:
+                        next_pc = int(self.evaluate(stmt.line_number))
+                    else:
+                        next_pc = self.err_line if self.err_line else self.pc
+                    break
+                    
                 elif isinstance(stmt, GotoStatement):
                     target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:
                         next_pc = target
                         break
                     else:
-                        print(f"Line does not exist in {self.pc}")
-                        self.running = False
+                        next_pc = self.trigger_error(8, self.pc)
                         break
                         
                 elif isinstance(stmt, GosubStatement):
@@ -550,8 +588,7 @@ class Interpreter:
                         next_pc = target
                         break
                     else:
-                        print(f"GOSUB Line does not exist in {self.pc}")
-                        self.running = False
+                        next_pc = self.trigger_error(8, self.pc)
                         break
                         
                 elif isinstance(stmt, ReturnStatement):
@@ -827,7 +864,7 @@ class Interpreter:
                     step_val = self.evaluate(stmt.step_expr)
                     
                     self.variables[stmt.identifier] = self.typecast(stmt.identifier, start_val)
-                    self.for_loops[stmt.identifier] = (next_pc, end_val, step_val)
+                    self.for_loops[stmt.identifier] = ((self.pc, stmt_idx), end_val, step_val)
                     if stmt.identifier in self.for_stack:
                         self.for_stack.remove(stmt.identifier)
                     self.for_stack.append(stmt.identifier)
@@ -981,8 +1018,16 @@ class Interpreter:
                                     self.for_stack.remove(var_name)
                     
                     if next_jump is not None:
-                        next_pc = next_jump
-                        break
+                        if isinstance(next_jump, tuple):
+                            jump_pc, jump_idx = next_jump
+                        else:
+                            jump_pc, jump_idx = next_jump, 0
+                        if jump_pc == self.pc:
+                            stmt_idx = jump_idx
+                        else:
+                            next_pc = jump_pc
+                            self.next_stmt_idx = jump_idx
+                            break
             
             self.display.update()
             self.display.process_events()

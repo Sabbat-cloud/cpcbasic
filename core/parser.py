@@ -145,7 +145,22 @@ class RsxStatement(Statement):
         self.params = params
 
 class OnErrorStatement(Statement):
-    pass
+    def __init__(self, line_number):
+        self.line_number = line_number
+
+class OnSqStatement(Statement):
+    def __init__(self, channel, line_number):
+        self.channel = channel
+        self.line_number = line_number
+
+class ErrorStatement(Statement):
+    def __init__(self, code):
+        self.code = code
+
+class ResumeStatement(Statement):
+    def __init__(self, line_number=None, is_next=False):
+        self.line_number = line_number
+        self.is_next = is_next
 
 class PokeStatement(Statement):
     def __init__(self, address, value):
@@ -735,6 +750,29 @@ class Parser:
                         line_number = self.parse_expression()
                     return OnBreakStatement(action, line_number)
                     
+                if self.current_token.type == KEYWORD and self.current_token.value == 'ERROR':
+                    self.eat(KEYWORD)
+                    if self.current_token.type == KEYWORD and self.current_token.value == 'GOTO':
+                        self.eat(KEYWORD)
+                    line_number = self.parse_expression()
+                    return OnErrorStatement(line_number)
+                
+                if self.current_token.type == KEYWORD and self.current_token.value == 'SQ':
+                    self.eat(KEYWORD)
+                    # parse optional '(' channel ')'
+                    channel = None
+                    if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                        self.eat(SYMBOL)
+                        channel = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ')':
+                            self.eat(SYMBOL)
+                    else:
+                        channel = self.parse_expression()
+                    if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
+                        self.eat(KEYWORD)
+                    line_number = self.parse_expression()
+                    return OnSqStatement(channel, line_number)
+                    
                 expr = self.parse_expression()
                 is_gosub = False
                 if self.current_token.type == KEYWORD and self.current_token.value == 'GOSUB':
@@ -1105,6 +1143,22 @@ class Parser:
                 if self.current_token.type not in (NEWLINE, EOF, SYMBOL):
                     expr = self.parse_expression()
                 return RandomizeStatement(expr)
+
+            elif self.current_token.value == 'ERROR':
+                self.eat(KEYWORD)
+                code = self.parse_expression()
+                return ErrorStatement(code)
+
+            elif self.current_token.value == 'RESUME':
+                self.eat(KEYWORD)
+                is_next = False
+                line_number = None
+                if self.current_token.type == KEYWORD and self.current_token.value == 'NEXT':
+                    self.eat(KEYWORD)
+                    is_next = True
+                elif self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    line_number = self.parse_expression()
+                return ResumeStatement(line_number, is_next)
 
             elif self.current_token.value == 'DEG':
                 self.eat(KEYWORD)
