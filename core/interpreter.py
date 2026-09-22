@@ -80,8 +80,8 @@ class Interpreter:
             "LOG": math.log,
             "LOG10": math.log10,
             "VAL": lambda x: float(x) if '.' in str(x) else int(x) if str(x).lstrip('-').isdigit() else 0,
-            "RIGHT_STR": lambda s, n: s[-n:] if n > 0 else "",
-            "MID_STR": lambda s, start, n=None: s[start-1:start-1+n] if n is not None else s[start-1:],
+            "RIGHT_STR": lambda s, n: s[-int(n):] if int(n) > 0 else "",
+            "MID_STR": lambda s, start, n=None: s[int(start)-1:int(start)-1+int(n)] if n is not None else s[int(start)-1:],
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
             "SQ": lambda x: 0,  # stub for sound queue status
@@ -97,7 +97,7 @@ class Interpreter:
             "FIX": int,
             "ROUND": lambda x, d=0: round(x, d) if d > 0 else int(round(x, d)),
             "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
-            "LEFT_STR": lambda s, n: s[:n] if n > 0 else "",
+            "LEFT_STR": lambda s, n: s[:int(n)] if int(n) > 0 else "",
             "UPPER_STR": lambda s: s.upper(),
             "STR_STR": lambda x: f" {x}" if x >= 0 else str(x),
             "SPACE_STR": lambda n: " " * int(n),
@@ -324,35 +324,43 @@ class Interpreter:
                 if isinstance(stmt, PrintStatement):
                     out = []
                     newline = True
-                    vals_for_using = []
+                    current_using_fmt = None
+                    current_vals_for_using = []
                     
+                    def flush_using():
+                        if current_using_fmt is not None and current_vals_for_using:
+                            fmt = str(self.evaluate(current_using_fmt))
+                            out.append(format_cpc_using(current_vals_for_using, fmt))
+                            current_vals_for_using.clear()
+
                     for expr in stmt.expressions:
-                        if isinstance(expr, Literal) and expr.type == 'SEPARATOR':
+                        if isinstance(expr, Literal) and expr.type == 'USING_FMT':
+                            flush_using()
+                            current_using_fmt = expr.value
+                            continue
+                        elif isinstance(expr, Literal) and expr.type == 'SEPARATOR':
                             if expr.value == ';':
                                 newline = False
                             elif expr.value == ',':
+                                flush_using()
                                 out.append('\t')
                                 newline = False
                         else:
                             evaluated = self.evaluate(expr)
-                            if isinstance(evaluated, float) and evaluated.is_integer():
-                                val = str(int(evaluated))
+                            if current_using_fmt is not None:
+                                current_vals_for_using.append(evaluated)
                             else:
-                                val = str(evaluated)
-                            if getattr(stmt, 'using_fmt', None):
-                                vals_for_using.append(evaluated)
-                            else:
+                                if isinstance(evaluated, float) and evaluated.is_integer():
+                                    val = str(int(evaluated))
+                                else:
+                                    val = str(evaluated)
                                 if isinstance(evaluated, (int, float)) and evaluated >= 0:
                                     val = " " + val
                                 out.append(val)
                             newline = True
                             
-                    
-                    if getattr(stmt, 'using_fmt', None):
-                        fmt = str(self.evaluate(stmt.using_fmt))
-                        out_str = format_cpc_using(vals_for_using, fmt)
-                    else:
-                        out_str = "".join(out)
+                    flush_using()
+                    out_str = "".join(out)
                         
                     # Print to terminal for logging
                     try:

@@ -431,16 +431,14 @@ class Parser:
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                 
-                using_fmt = None
-                if self.current_token.type == KEYWORD and self.current_token.value == 'USING':
-                    self.eat(KEYWORD)
-                    using_fmt = self.parse_expression()
-                    if self.current_token.type == SYMBOL and self.current_token.value == ';':
-                        self.eat(SYMBOL)
-
                 exprs = []
                 while self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
-                    if self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
+                    if self.current_token.type == KEYWORD and self.current_token.value == 'USING':
+                        self.eat(KEYWORD)
+                        exprs.append(Literal(self.parse_expression(), "USING_FMT"))
+                        if self.current_token.type == SYMBOL and self.current_token.value == ';':
+                            self.eat(SYMBOL)
+                    elif self.current_token.type == SYMBOL and self.current_token.value in (';', ','):
                         exprs.append(Literal(self.current_token.value, "SEPARATOR"))
                         self.eat(SYMBOL)
                     else:
@@ -449,10 +447,9 @@ class Parser:
                             exprs.append(expr)
                         else:
                             break
-                # Monkey-patch stream and using_fmt into PrintStatement for interpreter
+                # Monkey-patch stream into PrintStatement for interpreter
                 stmt = PrintStatement(exprs)
                 stmt.stream = stream
-                stmt.using_fmt = using_fmt
                 return stmt
             
             elif self.current_token.value == 'POKE':
