@@ -71,9 +71,10 @@ class DefFnStatement(Statement):
         self.expr = expr
 
 class InputStatement(Statement):
-    def __init__(self, prompt, variables):
+    def __init__(self, prompt, variables, stream=0):
         self.prompt = prompt
         self.variables = variables
+        self.stream = stream
 
 class SymbolStatement(Statement):
     def __init__(self, char_code, matrix):
@@ -162,6 +163,20 @@ class ResumeStatement(Statement):
     def __init__(self, line_number=None, is_next=False):
         self.line_number = line_number
         self.is_next = is_next
+
+class OpenInStatement(Statement):
+    def __init__(self, filename):
+        self.filename = filename
+
+class OpenOutStatement(Statement):
+    def __init__(self, filename):
+        self.filename = filename
+
+class CloseInStatement(Statement):
+    pass
+
+class CloseOutStatement(Statement):
+    pass
 
 class PokeStatement(Statement):
     def __init__(self, address, value):
@@ -605,10 +620,19 @@ class Parser:
                     line_number = self.parse_expression()
                 return RestoreStatement(line_number)
 
-            elif self.current_token.value == 'INPUT':
+            elif self.current_token.value == 'INPUT' or (self.current_token.type == IDENTIFIER and self.current_token.value.upper() == 'LINE' and getattr(self, 'tokens', []) and self.pos + 1 < len(self.tokens) and self.tokens[self.pos+1].value == 'INPUT'):
+                if self.current_token.value.upper() == 'LINE':
+                    self.eat(IDENTIFIER)
                 self.eat(KEYWORD)
+                
+                stream = Literal("0", NUMBER)
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    stream = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+
                 prompt = None
-                # Check if there is a prompt string
                 if self.current_token.type == STRING:
                     prompt = self.current_token.value
                     self.eat(STRING)
@@ -623,7 +647,7 @@ class Parser:
                         self.eat(SYMBOL)
                     else:
                         break
-                return InputStatement(prompt, variables)
+                return InputStatement(prompt, variables, stream)
 
             elif self.current_token.value == 'FRAME':
                 self.eat(KEYWORD)
@@ -1078,6 +1102,22 @@ class Parser:
             elif self.current_token.value == 'EI':
                 self.eat(KEYWORD)
                 return EiStatement()
+
+            elif self.current_token.value == 'OPENIN':
+                self.eat(KEYWORD)
+                return OpenInStatement(self.parse_expression())
+
+            elif self.current_token.value == 'OPENOUT':
+                self.eat(KEYWORD)
+                return OpenOutStatement(self.parse_expression())
+
+            elif self.current_token.value == 'CLOSEIN':
+                self.eat(KEYWORD)
+                return CloseInStatement()
+
+            elif self.current_token.value == 'CLOSEOUT':
+                self.eat(KEYWORD)
+                return CloseOutStatement()
 
             elif self.current_token.value in ('DEFINT', 'DEFREAL', 'DEFSTR'):
                 type_name = self.current_token.value

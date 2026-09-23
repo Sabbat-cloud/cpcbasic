@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Amstrad CPC BASIC Emulator")
     parser.add_argument("filename", nargs="?", help="Archivo .cpcbas a ejecutar")
     parser.add_argument("--scale", type=int, default=2, help="Escalado de la ventana (ej. 2, 3)")
+    parser.add_argument("--list", action="store_true", help="Solo muestra el listado del código y sale, sin ejecutarlo")
     args = parser.parse_args()
 
     if args.filename:
@@ -67,6 +68,11 @@ if __name__ == '__main__':
 110 SOUND 1, 142, 50, 15
 """
         print("--- Usando código por defecto (pasa un fichero .cpcbas como argumento) ---")
+
+    if args.list:
+        print("\n--- LISTADO DEL CÓDIGO ---")
+        print(code)
+        sys.exit(0)
 
     print("--- Tokens ---")
     lexer = Lexer(code)

@@ -1,0 +1,93 @@
+10 REM =====================================
+20 REM RETRO-IDE: EDITOR CON HIGHLIGHTING
+30 REM =====================================
+40 MODE 2: BORDER 0
+50 REM Definir paleta: 0=Fondo, 1=Normal, 2=Palabras clave, 3=Valores
+60 INK 0,0: INK 1,24: INK 2,18: INK 3,6
+70 DIM T$(100) : REM Array para guardar 100 lineas de texto
+80 MAXL=0
+85 CURRENT_FILE$="<Ninguno>"
+90 REM --- MENU PRINCIPAL ---
+100 CLS: PEN 1: PRINT "--- RETRO IDE (PYTHON) ---"
+105 PRINT "Fichero actual: "; CURRENT_FILE$
+110 PRINT "1. Escribir texto"
+120 PRINT "2. Ver codigo (Sintaxis)"
+130 PRINT "3. Guardar fichero"
+140 PRINT "4. Cargar fichero"
+150 PRINT "5. Salir"
+160 LOCATE 1,9: PRINT "Elige opcion: ";
+170 A$ = INKEY$: IF A$="" THEN 170
+180 OP = VAL(A$)
+190 IF OP=1 THEN GOSUB 1000
+200 IF OP=2 THEN GOSUB 2000
+210 IF OP=3 THEN GOSUB 3000
+220 IF OP=4 THEN GOSUB 4000
+230 IF OP=5 THEN END
+240 GOTO 90
+
+1000 REM --- 1. ESCRIBIR TEXTO ---
+1010 CLS: PRINT "Escribe. Linea vacia para terminar."
+1020 FOR I = MAXL+1 TO 100
+1030 PRINT I;":";
+1040 LINE INPUT A$
+1050 IF A$="" THEN MAXL=I-1: RETURN
+1060 T$(I) = A$
+1070 NEXT I
+1080 MAXL=100: RETURN
+
+2000 REM --- 2. VER TEXTO (RESALTADO) ---
+2010 CLS: PRINT "--- CODIGO FUENTE ---"
+2020 FOR I = 1 TO MAXL
+2030 A$ = T$(I)
+2040 GOSUB 5000 : REM Llama al motor de resaltado
+2050 PRINT : REM Salto de linea
+2060 NEXT I
+2065 PRINT "Pulsa una tecla..."
+2070 A$=INKEY$: IF A$="" THEN 2070
+2080 RETURN
+
+3000 REM --- 3. GUARDAR FICHERO ---
+3010 LOCATE 1,12: LINE INPUT "Nombre del fichero? ", F$
+3020 IF F$="" THEN RETURN
+3030 OPENOUT F$
+3040 FOR I=1 TO MAXL
+3050 PRINT #9, T$(I)
+3060 NEXT I
+3070 CLOSEOUT
+3075 CURRENT_FILE$ = F$
+3080 PRINT "Guardado con exito!": FOR W=1 TO 500: NEXT W: RETURN
+
+4000 REM --- 4. CARGAR FICHERO ---
+4010 LOCATE 1,12: LINE INPUT "Nombre del fichero? ", F$
+4020 IF F$="" THEN RETURN
+4030 OPENIN F$
+4040 I=0
+4050 IF EOF THEN 4100
+4060 I=I+1
+4070 LINE INPUT #9, A$
+4075 T$(I) = A$
+4080 GOTO 4050
+4100 CLOSEIN
+4110 MAXL=I
+4115 CURRENT_FILE$ = F$
+4120 PRINT "Cargado con exito!": FOR W=1 TO 500: NEXT W: RETURN
+
+5000 REM --- MOTOR DE RESALTADO DE SINTAXIS ---
+5010 L = LEN(A$): P = 1
+5020 IF P > L THEN RETURN
+5030 W$ = ""
+5040 C$ = MID$(A$, P, 1)
+5050 REM Delimitadores: espacio, parentesis, dos puntos, comas
+5060 IF C$=" " OR C$="(" OR C$=")" OR C$=":" OR C$="," THEN 5100
+5070 W$ = W$ + C$
+5080 P = P + 1
+5090 IF P <= L THEN GOTO 5040
+5100 REM Analizar la palabra encontrada
+5110 IF W$="" THEN 5160
+5120 C = 1 : REM Color por defecto (PEN 1)
+5130 REM Lista de palabras clave de Python (PEN 2)
+5140 IF W$="def" OR W$="import" OR W$="print" OR W$="if" OR W$="for" THEN C = 2
+5150 PEN C: PRINT W$;
+5160 REM Imprimir el delimitador en color normal
+5170 IF P <= L THEN PEN 1: PRINT C$; : P = P + 1: GOTO 5020
+5180 RETURN

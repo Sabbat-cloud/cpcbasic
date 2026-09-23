@@ -113,9 +113,23 @@ class Interpreter:
             "EXP": math.exp,
             "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x),
             "SPC": lambda x: " " * int(x),
-            "TAB": lambda x: " " * max(0, int(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, int(x) - 1)
+            "TAB": lambda x: " " * max(0, int(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, int(x) - 1),
+            "EOF": self.check_eof
         }
         
+    def check_eof(self):
+        if not hasattr(self, 'file_in') or 9 not in self.file_in:
+            return -1
+        try:
+            pos = self.file_in[9].tell()
+            char = self.file_in[9].read(1)
+            if not char:
+                return -1
+            self.file_in[9].seek(pos)
+            return 0
+        except:
+            return -1
+
     def get_joy_state(self, joy_id):
         keys = pygame.key.get_pressed()
         state = 0
@@ -255,7 +269,7 @@ class Interpreter:
                     elif kw == 'XOR': s += ' ^ '
                     elif kw in self.builtins:
                         s += kw
-                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL"):
+                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF"):
                             if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                 s += "()"
                     else: s += f' {kw} '
@@ -384,11 +398,14 @@ class Interpreter:
                         print(out_str.encode('ascii', 'replace').decode('ascii'))
                         
                     stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
-                    # Print to CPC graphical screen
-                    if getattr(stmt, 'stream', None) is not None and getattr(stmt, 'stream', None) == 8:
-                        self.display.print_text(out_str + ("\r\n" if newline else ""), 0)
+                    if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
+                        self.file_out[9].write(out_str + ("\n" if newline else ""))
                     else:
-                        self.display.print_text(out_str + ("\r\n" if newline else ""), stream)
+                        # Print to CPC graphical screen
+                        if getattr(stmt, 'stream', None) is not None and getattr(stmt, 'stream', None) == 8:
+                            self.display.print_text(out_str + ("\r\n" if newline else ""), 0)
+                        else:
+                            self.display.print_text(out_str + ("\r\n" if newline else ""), stream)
                     
                 elif isinstance(stmt, LocateStatement):
                     col = int(self.evaluate(stmt.col))
@@ -879,25 +896,8 @@ class Interpreter:
                     cond_val = self.evaluate(stmt.condition)
                     branch_stmts = stmt.then_stmts if cond_val else getattr(stmt, 'else_stmts', [])
                     
-                    should_break = False
-                    for b_stmt in branch_stmts:
-                        if isinstance(b_stmt, GotoStatement):
-                            target = self.evaluate(b_stmt.line_number)
-                            if target in self.program.lines:
-                                next_pc = target
-                                should_break = True
-                                break
-                            else:
-                                print(f"Line {target} does not exist!")
-                                self.running = False
-                                should_break = True
-                                break
-                        else:
-                            statements.append(b_stmt)
-                    
-                    if should_break:
-                        break
-                            
+                    if branch_stmts:
+                        statements = statements[:stmt_idx] + branch_stmts + statements[stmt_idx:]
                 elif isinstance(stmt, ForStatement):
                     start_val = self.evaluate(stmt.start_expr)
                     end_val = self.evaluate(stmt.end_expr)
@@ -988,13 +988,46 @@ class Interpreter:
                     self.running = False
                     break
 
+                elif type(stmt).__name__ == 'OpenInStatement':
+                    filename = str(self.evaluate(stmt.filename))
+                    if not hasattr(self, 'file_in'): self.file_in = {}
+                    try:
+                        self.file_in[9] = open(filename, "r", encoding="utf-8")
+                    except Exception as e:
+                        print(f"Error opening {filename}: {e}")
+
+                elif type(stmt).__name__ == 'OpenOutStatement':
+                    filename = str(self.evaluate(stmt.filename))
+                    if not hasattr(self, 'file_out'): self.file_out = {}
+                    try:
+                        self.file_out[9] = open(filename, "w", encoding="utf-8")
+                    except Exception as e:
+                        print(f"Error opening {filename}: {e}")
+
+                elif type(stmt).__name__ == 'CloseInStatement':
+                    if hasattr(self, 'file_in') and 9 in self.file_in:
+                        self.file_in[9].close()
+                        del self.file_in[9]
+
+                elif type(stmt).__name__ == 'CloseOutStatement':
+                    if hasattr(self, 'file_out') and 9 in self.file_out:
+                        self.file_out[9].close()
+                        del self.file_out[9]
+
                 elif isinstance(stmt, InputStatement):
-                    if stmt.prompt:
-                        self.display.print_text(stmt.prompt)
-                        self.display.update()
-                    # We use the new pygame input method
-                    val = self.display.input_string()
-                    print(f"[INPUT] user entered: {val}")
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                    if stream == 9 and hasattr(self, 'file_in') and 9 in self.file_in:
+                        # read from file
+                        val = self.file_in[9].readline()
+                        if val.endswith("\n"): val = val[:-1]
+                        if val.endswith("\r"): val = val[:-1]
+                    else:
+                        if stmt.prompt:
+                            self.display.print_text(stmt.prompt)
+                            self.display.update()
+                        val = self.display.input_string()
+                        print(f"[INPUT] user entered: {val}")
+                        
                     if stmt.variables:
                         var = stmt.variables[0]
                         if not var.endswith('$'):

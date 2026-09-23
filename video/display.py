@@ -665,7 +665,7 @@ class Display:
         pygame.event.clear(pygame.KEYDOWN)
         pygame.event.clear(pygame.KEYUP)
 
-    def input_string(self):
+    def input_string(self, stream=0):
         input_str = ""
         while True:
             for event in pygame.event.get():
@@ -674,7 +674,7 @@ class Display:
                     sys.exit(0)
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
-                        self.print_text('\n')
+                        self.print_text('\r\n', stream=stream)
                         self.update()
                         return input_str
                     elif event.key == pygame.K_BACKSPACE:
@@ -684,7 +684,7 @@ class Display:
                             if self.streams[stream]["text_col"] < 1:
                                 self.streams[stream]["text_col"] = self.get_max_cols()
                                 self.streams[stream]["text_row"] -= 1
-                            self.print_text(' ')
+                            self.print_text(' ', stream=stream)
                             self.streams[stream]["text_col"] -= 1
                             if self.streams[stream]["text_col"] < 1:
                                 self.streams[stream]["text_col"] = self.get_max_cols()
@@ -692,6 +692,6 @@ class Display:
                             self.update()
                     elif event.unicode and ord(event.unicode) >= 32:
                         input_str += event.unicode
-                        self.print_text(event.unicode)
+                        self.print_text(event.unicode, stream=stream)
                         self.update()
             pygame.time.wait(10)
