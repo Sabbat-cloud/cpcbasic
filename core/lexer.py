@@ -20,7 +20,7 @@ KEYWORDS = {
     'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS',
     'RANDOMIZE', 'DEG', 'RAD', 'FILL', 'ERASE', 'EVERY', 'AFTER',
     'POKE', 'PEEK', 'JOY', 'DEF', 'DI', 'EI', 'GRAPHICS', 'USING',
-    'ERROR', 'ERR', 'ERL', 'RESUME', 'SQ'
+    'ERROR', 'ERR', 'ERL', 'RESUME', 'SQ', 'PAUSE'
 }
 
 token_specification = [

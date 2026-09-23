@@ -1,5 +1,9 @@
 # Emulador CPCBasic
 
+![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)
+![Amstrad CPC](https://img.shields.io/badge/Plataforma-Amstrad_CPC-red.svg)
+![Locomotive BASIC](https://img.shields.io/badge/Lenguaje-Locomotive_BASIC-yellow.svg)
+![Licencia](https://img.shields.io/badge/Licencia-MIT-green.svg)
 *[Read this in English](README.md)*
 
 CPCBasic es un intérprete de alto nivel de Locomotive BASIC de Amstrad CPC escrito completamente en Python. En lugar de emular la arquitectura del hardware Z80 ciclo a ciclo, este emulador implementa un analizador (Parser) AST (Abstract Syntax Tree) personalizado que lee archivos de texto plano en BASIC (`.cpcbas` o `.bas` en ASCII) y los ejecuta directamente utilizando software moderno.
@@ -8,19 +12,20 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 ## Características
 
-- **Tokenizador Léxico y Parser AST**: Interpretación completa de palabras clave de Locomotive BASIC, bucles lógicos (`FOR`, `IF/THEN`), subrutinas (`GOSUB`/`RETURN`) y funciones matemáticas.
+- **Tokenizador Léxico y Parser AST**: Interpretación completa de palabras clave de Locomotive BASIC. El módulo `core/parser.py` implementa un analizador descendente recursivo (Recursive Descent Parser) que convierte la secuencia de tokens en un Árbol de Sintaxis Abstracta (AST). Maneja de forma robusta la sintaxis compleja de Amstrad: múltiples sentencias por línea separadas por dos puntos (`:`), bucles anidados, condiciones `IF/THEN/ELSE`, operaciones matemáticas complejas, expresiones y sentencias exclusivas del sistema como las relativas a interrupciones y memoria.
 - **Funciones Matemáticas y de Cadena**: 100% de cobertura matemática del estándar Amstrad (`ATN`, `SIN`, `COS`, `TAN`, `PI`, `SQR`, `INT`, `FIX`, `ROUND`, `CINT`, `CREAL`, `UNT`, `LOG`, `MAX`, `MIN`, `EXP`, `SGN`) y amplio soporte de cadenas (`CHR$`, `COPYCHR$`, `LEFT$`, `UPPER$`, `STR$`, `SPACE$`, `STRING$`, `HEX$`, `BIN$`, `INSTR`, `DEC$`).
+- **Control Avanzado de Terminal**: Soporte completo para los caracteres de control mediante `CHR$()`, permitiendo saltos de línea, movimientos del cursor (`CHR$(11)`), transparencia y sobreimpresión de texto (`CHR$(22)`), y video inverso/intercambio de tintas (`CHR$(24)`).
 - **Subsistema Gráfico Auténtico**: Utiliza la paleta de colores de firmware estándar del Amstrad CPC y soporta resoluciones de hardware (`MODE 0`, `MODE 1`, `MODE 2`). Implementa comandos gráficos como `PLOT`, `DRAW`, `MOVE`, `ORIGIN`, y `CLG`.
-- **Cadenas y Salida de Terminal**: Maneja correctamente las instrucciones `PRINT` con separadores (`,`, `;`), además de funciones de cadena como `CHR$`.
+- **Cadenas y Salida de Terminal**: Maneja correctamente las instrucciones `PRINT` con separadores (`,`, `;`), además de soporte para streams (`#`).
 - **Fuente de Píxeles Original**: Integra la fuente de píxeles original del CPC464 para una experiencia de renderizado de texto 1:1 (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Audio Procedural (AY-3-8912)**: Interpreta de manera precisa el comando `SOUND` y genera ondas cuadradas y ruido blanco procedurales en tiempo real mediante `numpy` y el mixer de Pygame.
-- **Interacción con Teclado y Joysticks**: Soporte para lectura asíncrona de teclado (`INKEY$`, `INKEY`) y joysticks simulados mediante Pygame (`JOY`).
-- **Memoria Virtual (PEEK/POKE)**: Implementa una matriz de RAM virtual de 64KB, lo que permite que scripts antiguos con comandos `PEEK` y `POKE` se ejecuten sin lanzar errores por falta de memoria.
+- **Interacción con Teclado y Joysticks**: Soporte para lectura asíncrona de teclado (`INKEY$`, `INKEY`), pausas de hardware (`CALL &BB18`, `PAUSE 0`) y joysticks simulados mediante Pygame (`JOY`).
+- **Memoria Virtual (PEEK/POKE)**: Implementa una matriz de RAM virtual de 64KB y llamadas a memoria simuladas (`CALL`), lo que permite que scripts antiguos se ejecuten sin lanzar errores por falta de memoria.
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios de código máquina Z80 compilados, dado que es un intérprete de lenguaje de alto nivel, no un emulador de CPU).*
 
-**⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa muy temprana de desarrollo (estado inicial). Muchas características, instrucciones o comportamientos todavía no están implementados, y muchas cosas podrían fallar.**
+**⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa temprana de desarrollo. Muchas características podrían fallar.**
 
 ## Instalación
 
@@ -43,20 +48,22 @@ Puedes ejecutar el emulador pasándole un script basic como argumento. Por defec
 python main.py examples/matrix.cpcbas --scale 3
 ```
 
-También puedes ejecutar imágenes `.dsk` directamente, siempre y cuando los scripts en su interior estén guardados en formato ASCII:
+También puedes ejecutar imágenes `.dsk` directamente:
 ```bash
 python main.py midisco.dsk
 ```
 
-## Ejemplos
+## Ejemplos Completos
 
-Revisa la carpeta `examples/` para probar las capacidades del emulador:
-- `matrix.cpcbas`: Efecto Matrix que demuestra el uso de colores, números aleatorios, bucles y sonido procedural.
-- `juego_reflejos.cpcbas`: Un juego completo con temporizadores asíncronos (`AFTER`/`EVERY`), envolventes de volumen/tono, lectura física del teclado (`INKEY`) y manejo complejo de pantalla.
-- `demo_colores.cpcbas`: Intercambio de colores de bordes y tintas usando temporizadores lógicos.
-- `movimiento.cpcbas`: Demo gráfica moviendo elementos interactivos.
-- `teclado.cpcbas`: Un bucle de interacción de teclado en tiempo real usando el búfer `INKEY$`.
-- `circulos.cpcbas` y similares: Pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
+Revisa la carpeta `examples/` para probar las capacidades del emulador. Algunos de los más de 20 ejemplos incluidos son:
+- **`matrix.cpcbas`**: Efecto Matrix que demuestra el uso de colores, números aleatorios, bucles y sonido procedural.
+- **`juego_reflejos.cpcbas`**: Un juego completo con temporizadores asíncronos (`AFTER`/`EVERY`), envolventes de volumen/tono, lectura física del teclado (`INKEY`) y manejo complejo de pantalla.
+- **`demo_colores.cpcbas`**: Intercambio de colores de bordes y tintas usando temporizadores lógicos.
+- **`subrrayadotexto.cpcbas` y `videoinverso.cpcbas`**: Ejemplos del uso de caracteres de control avanzados como la transparencia (`CHR$(22)`) y el video inverso (`CHR$(24)`).
+- **`pause.cpcbas`**: Demostración de las pausas del sistema mediante `CALL &BB18` y `PAUSE 0`.
+- **`movimiento.cpcbas` y `teclado.cpcbas`**: Demos gráficas interactuando con el búfer de teclado en tiempo real.
+- **`sprite.cpcbas`**: Creación de gráficos definidos por el usuario con `SYMBOL`.
+- **`circulos.cpcbas`, `figura3.cpcbas`, `cuadrados.cpcbas`**: Extensas pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
 
 - **Ejemplos del Manual Oficial**: Gracias a las últimas actualizaciones en variables de cadena y matemáticas, la mayoría de los ejemplos sencillos del *Manual de Usuario de Locomotive BASIC* pueden probarse directamente (por ejemplo, pegándolos en 	emp_run.cpcbas) y funcionarán a la primera.
 

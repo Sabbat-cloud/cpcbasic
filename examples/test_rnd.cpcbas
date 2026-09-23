@@ -1,3 +1,0 @@
-10 C$=CHR$(RND*255)
-20 PRINT "C$=";C$
-30 GOTO 10

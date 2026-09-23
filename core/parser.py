@@ -1,4 +1,5 @@
 from core.lexer import Lexer, EOF, NUMBER, HEX_NUMBER, STRING, IDENTIFIER, KEYWORD, SYMBOL, NEWLINE
+from core.lexer import Token
 
 class ASTNode:
     pass
@@ -1043,6 +1044,21 @@ class Parser:
                 row = self.parse_expression()
                 return LocateStatement(col, row, stream)
 
+            elif self.current_token.value == 'CALL':
+                self.eat(KEYWORD)
+                address = self.parse_expression()
+                params = []
+                while self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    params.append(self.parse_expression())
+                return CallStatement(address, params)
+
+            elif self.current_token.value == 'PAUSE':
+                self.eat(KEYWORD)
+                time_expr = self.parse_expression()
+                # We can reuse CallStatement with a dummy address for PAUSE or map it to CALL &BB18
+                return CallStatement(Literal("&BB18", "HEX_NUMBER"), [])
+
             elif self.current_token.value == 'CLS':
                 self.eat(KEYWORD)
                 stream = None
@@ -1099,15 +1115,16 @@ class Parser:
             elif self.current_token.value == 'DEF':
                 self.eat(KEYWORD)
                 fn_name = ""
-                if self.current_token.type == IDENTIFIER:
-                    fn_name = self.current_token.value
+                if self.current_token.type == IDENTIFIER and self.current_token.value.upper() == 'FN':
                     self.eat(IDENTIFIER)
-                elif self.current_token.type == KEYWORD and self.current_token.value == 'FN':
-                    # Sometimes FN is separated
-                    self.eat(KEYWORD)
                     if self.current_token.type == IDENTIFIER:
-                        fn_name = "FN" + self.current_token.value
+                        fn_name = "FN" + self.current_token.value.upper()
                         self.eat(IDENTIFIER)
+                    else:
+                        fn_name = "FN"
+                elif self.current_token.type == IDENTIFIER:
+                    fn_name = self.current_token.value.upper()
+                    self.eat(IDENTIFIER)
                         
                 params = []
                 if self.current_token.type == SYMBOL and self.current_token.value == '(':
@@ -1258,6 +1275,7 @@ class Parser:
     def parse_expression(self):
         expr_tokens = []
         paren_level = 0
+        expecting_op = False
         while self.current_token.type not in (NEWLINE, EOF):
             if self.current_token.type == SYMBOL and self.current_token.value == '(':
                 paren_level += 1
@@ -1270,14 +1288,35 @@ class Parser:
                 break
             if paren_level == 0 and self.current_token.type == KEYWORD and self.current_token.value in ('TO', 'STEP', 'THEN', 'GOTO', 'GOSUB', 'ELSE'):
                 break
+                
+            # Break if we have two adjacent values (e.g. TAB(20) A$)
+            is_value_start = self.current_token.type in ('IDENTIFIER', 'NUMBER', 'HEX_NUMBER', 'STRING') or \
+                             (self.current_token.type == 'KEYWORD' and self.current_token.value not in ('MOD', 'AND', 'OR', 'XOR', 'NOT'))
+            if paren_level == 0 and expecting_op and is_value_start:
+                break
             
             # String literals are kept as Literal nodes directly to simplify
-            if self.current_token.type == STRING and not expr_tokens:
+            if self.current_token.type == 'STRING' and not expr_tokens:
                 val = self.current_token.value
-                self.eat(STRING)
-                return Literal(val, STRING)
+                self.eat('STRING')
+                return Literal(val, 'STRING')
                 
-            expr_tokens.append(self.current_token)
+            tok = self.current_token
+            # FN merging
+            if tok.type == 'IDENTIFIER' and tok.value.upper() == 'FN':
+                next_tok = self.tokens[self.pos + 1] if self.pos + 1 < len(self.tokens) else None
+                if next_tok and next_tok.type == 'IDENTIFIER':
+                    tok = Token('IDENTIFIER', "FN" + next_tok.value.upper(), tok.line, tok.column)
+                    self.pos += 1
+            
+            expr_tokens.append(tok)
+            
+            if tok.type in ('IDENTIFIER', 'NUMBER', 'HEX_NUMBER', 'STRING') or (tok.type == 'SYMBOL' and tok.value == ')'):
+                expecting_op = True
+            elif tok.type == 'KEYWORD' and tok.value not in ('MOD', 'AND', 'OR', 'XOR', 'NOT'):
+                expecting_op = True
+            else:
+                expecting_op = False
             
             self.pos += 1
             if self.pos < len(self.tokens):

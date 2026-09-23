@@ -15,7 +15,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -111,7 +111,9 @@ class Interpreter:
             "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
             "MIN": min,
             "EXP": math.exp,
-            "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x)
+            "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x),
+            "SPC": lambda x: " " * int(x),
+            "TAB": lambda x: " " * max(0, int(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, int(x) - 1)
         }
         
     def get_joy_state(self, joy_id):
@@ -191,27 +193,40 @@ class Interpreter:
                 return int(expr.value)
             elif expr.type == 'STRING':
                 return expr.value
+            elif expr.type == 'HEX_NUMBER':
+                return int(expr.value[1:], 16)
         elif isinstance(expr, RawExpression):
             s = ""
+            skip_next = False
             for i, t in enumerate(expr.tokens):
+                if skip_next:
+                    skip_next = False
+                    continue
                 if t.type == 'IDENTIFIER':
-                    if t.value.upper() == 'INKEY$':
+                    val_upper = t.value.upper()
+                    if val_upper == 'FN' and i + 1 < len(expr.tokens) and expr.tokens[i+1].type == 'IDENTIFIER':
+                        val_upper = "FN" + expr.tokens[i+1].value.upper()
+                        skip_next = True
+                    
+                    if val_upper == 'INKEY$':
                         inkey_val = self.display.get_inkey_str()
                         s += repr(inkey_val)
-                    elif t.value.upper() in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
-                        s += t.value.upper().replace('$', '_STR')
-                    elif t.value.upper() in self.builtins:
-                        kw = t.value.upper()
+                    elif val_upper in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
+                        s += val_upper.replace('$', '_STR')
+                    elif val_upper in self.builtins:
+                        kw = val_upper
                         s += kw
                         if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL"):
-                            if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                            next_idx = i + 2 if skip_next else i + 1
+                            if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                 s += "()"
-                    elif t.value in self.arrays and i + 1 < len(expr.tokens) and expr.tokens[i+1].value == '(':
+                    elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
                         s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
-                    elif t.value.upper() in self.user_functions:
-                        s += f"USER_FN_{t.value.upper()}"
+                    elif val_upper in self.user_functions:
+                        s += f"USER_FN_{val_upper}"
                         # If called without parenthesis, add them
-                        if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                        next_idx = i + 2 if skip_next else i + 1
+                        if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                             s += "()"
                     else:
                         val = self.variables.get(t.value, self.get_default_value(t.value))
@@ -580,6 +595,23 @@ class Interpreter:
                         next_pc = self.err_line if self.err_line else self.pc
                     break
                     
+                elif isinstance(stmt, CallStatement):
+                    addr = self.evaluate(stmt.address)
+                    if isinstance(addr, str) and addr.startswith('0x'):
+                        addr = int(addr, 16)
+                    elif isinstance(addr, str) and addr.upper().startswith('&BB'):
+                        addr = int(addr[1:], 16)
+                    else:
+                        try: addr = int(addr)
+                        except: addr = 0
+                    if addr == 0xBB18: # KM WAIT CHAR / PAUSE
+                        while True:
+                            self.display.process_events()
+                            if self.display.key_buffer:
+                                self.display.key_buffer.pop(0)
+                                break
+                            pygame.time.wait(10)
+
                 elif isinstance(stmt, GotoStatement):
                     target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:

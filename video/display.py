@@ -74,6 +74,7 @@ class Display:
         self.esc_state = 0
         self.esc_cmd = ''
         self.esc_args = []
+        self.transparent_text = False
         
         self._update_palette(False)
         self.logical_surface.fill(self.current_paper)
@@ -322,6 +323,9 @@ class Display:
                 elif self.esc_state == 15: # PEN
                     self.set_pen(char_code % 16, stream)
                     self.esc_state = 0
+                elif self.esc_state == 22: # Transparent mode
+                    self.transparent_text = (char_code != 0)
+                    self.esc_state = 0
                 elif self.esc_state == 31: # LOCATE
                     self.esc_args.append(char_code)
                     if len(self.esc_args) == 2:
@@ -349,6 +353,8 @@ class Display:
                     self.esc_state = 14
                 elif char_code == 15: # Set Pen
                     self.esc_state = 15
+                elif char_code == 22: # Set Transparent mode
+                    self.esc_state = 22
                 elif char_code == 24: # CAN (Inverse Video)
                     if hasattr(self, 'streams') and stream in self.streams:
                         tmp = self.streams[stream]['pen']
@@ -389,6 +395,9 @@ class Display:
                     except pygame.error:
                         pass
                 
+                active_pen = self.streams[stream]['pen'] if hasattr(self, 'streams') and stream in self.streams else self.current_pen
+                active_paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+
                 if char_surface is not None:
                     with pygame.PixelArray(self.logical_surface) as pxarray:
                         for cy in range(char_height):
@@ -398,9 +407,9 @@ class Display:
                                 if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
                                     color = char_surface.get_at((cx, cy))
                                     if color.r > 127:
-                                        pxarray[px_x, px_y] = self.current_pen
-                                    else:
-                                        pxarray[px_x, px_y] = self.current_paper
+                                        pxarray[px_x, px_y] = active_pen
+                                    elif not self.transparent_text:
+                                        pxarray[px_x, px_y] = active_paper
                 
                 if self.tag_active:
                     self.graphics_x += char_width
