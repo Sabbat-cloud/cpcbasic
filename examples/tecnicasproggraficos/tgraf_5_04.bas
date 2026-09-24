@@ -24,11 +24,13 @@
 1100   DRAWR 0,-ladoy
 1110 NEXT
 1120 RETURN
-1999 REM ciclo de cambio del color de las tintas para que aparezca un reetangulo cada vez 2000 continue=1
+1999 REM ciclo de cambio del color de las tintas para que aparezca un reetangulo cada vez
+2000 continue=1
 2010 tintacom=1:tintasig=2
 2019 REM continuar indefinidamente
 2020 WHILE continue=1
-2029   REM se espera la pulsacion de una tecla 2030 respuesta$=""
+2029   REM se espera la pulsacion de una tecla
+2030   respuesta$=""
 2040   WHILE respuesta$=""
 2050     respuesta$=INKEY$
 2060   WEND

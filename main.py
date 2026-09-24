@@ -49,6 +49,9 @@ if __name__ == '__main__':
             try:
                 with open(args.filename, "r", encoding="utf-8") as f:
                     code = f.read()
+            except UnicodeDecodeError:
+                with open(args.filename, "r", encoding="latin-1") as f:
+                    code = f.read()
             except FileNotFoundError:
                 print(f"Error: No se encontró el archivo {args.filename}")
                 sys.exit(1)

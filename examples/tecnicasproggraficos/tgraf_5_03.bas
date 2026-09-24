@@ -6,7 +6,7 @@
 60 x=300: y=300
 70 xd=100:yd=50
 79 REM poner la tinta 2 con el color del fondo 
-30 INK 2,1
+80 INK 2,1
 89 REM dibujar un rectangulo usando la tinta 2
 90 color=2:GOSUB 1000
 100 continue=1
@@ -18,10 +18,10 @@
 139   REM en espera de que se pulse una tecla
 140   respuesta$=""
 150   WHILE respuesta$=""
-160     respuesta$=LOWER$(INKEY$).
+160     respuesta$=LOWER$(INKEY$)
 170   WEND
 179   REM hacer visible la tinta 2 y la tinta 1 de 1 color del fondo
-160   INK 1,1
+180   INK 1,1
 190   INK 2,24
 199   REM en espera de que se pulse una tecla
 200   respuesta$=""
@@ -39,7 +39,5 @@
 1030 DRAWR -xd,0 
 1040 DRAWR 0,-yd 
 1050 RETURN
-
-'-- Solapados
-59 REM esta vez los dos rectangulos se solapan 
-60 x=120:y=100
+1060 REM esta vez los dos rectangulos se solapan 
+1070 rem 60 x=120:y=100

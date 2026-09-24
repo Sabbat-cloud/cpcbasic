@@ -345,18 +345,33 @@ class Display:
                 elif char_code == 7: # BEL
                     continue
                 elif char_code == 8: # BS (Left)
-                    self.streams[stream]["text_col"] = max(1, self.streams[stream]["text_col"] - 1)
+                    if self.tag_active:
+                        self.graphics_x -= char_width
+                    else:
+                        self.streams[stream]["text_col"] = max(1, self.streams[stream]["text_col"] - 1)
                 elif char_code == 9: # TAB (Right)
-                    self.streams[stream]["text_col"] = min(win_cols, self.streams[stream]["text_col"] + 1)
+                    if self.tag_active:
+                        self.graphics_x += char_width
+                    else:
+                        self.streams[stream]["text_col"] = min(win_cols, self.streams[stream]["text_col"] + 1)
                 elif char_code == 10: # LF (Down)
-                    self.streams[stream]["text_row"] += 1
-                    if self.streams[stream]["text_row"] > win_rows: self.streams[stream]["text_row"] = win_rows
+                    if self.tag_active:
+                        self.graphics_y -= char_height
+                    else:
+                        self.streams[stream]["text_row"] += 1
+                        if self.streams[stream]["text_row"] > win_rows: self.streams[stream]["text_row"] = win_rows
                 elif char_code == 11: # VT (Up)
-                    self.streams[stream]["text_row"] = max(1, self.streams[stream]["text_row"] - 1)
+                    if self.tag_active:
+                        self.graphics_y += char_height
+                    else:
+                        self.streams[stream]["text_row"] = max(1, self.streams[stream]["text_row"] - 1)
                 elif char_code == 12: # FF (Clear Window)
                     self.clear_graphics(stream) # Text clear
                 elif char_code == 13: # CR (Left edge)
-                    self.streams[stream]["text_col"] = 1
+                    if self.tag_active:
+                        self.graphics_x = 0
+                    else:
+                        self.streams[stream]["text_col"] = 1
                 elif char_code == 14: # Set Paper
                     self.esc_state = 14
                 elif char_code == 15: # Set Pen

@@ -87,6 +87,7 @@ class Interpreter:
             "SQ": lambda x: 0,  # stub for sound queue status
             "LEN": len,
             "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
+            "TESTR": lambda x, y: self.display.test(self.display.graphics_x + x, self.display.graphics_y + y) if hasattr(self.display, 'test') else 0,
             "REMAIN": lambda x: 0,
             "INKEY": lambda key: self.display.get_inkey_state(int(key)),
             "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
@@ -225,7 +226,7 @@ class Interpreter:
                     if val_upper == 'INKEY$':
                         inkey_val = self.display.get_inkey_str()
                         s += repr(inkey_val)
-                    elif val_upper in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
+                    elif val_upper in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'LOWER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
                         s += val_upper.replace('$', '_STR')
                     elif val_upper in self.builtins:
                         kw = val_upper
