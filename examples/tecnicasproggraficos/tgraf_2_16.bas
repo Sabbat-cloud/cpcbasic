@@ -1,0 +1,8 @@
+10 MODE 1
+19 REM los tres caracteres que forman el camion
+20 SYMBOL 240,0,0,96,96,96,127,18,12
+30 SYMBOL 241,0,0,0,0,0,255,0,0
+40 SYMBOL 242,248,132,132,255,255,255,72,48 
+50 camion$=CHR$(240)+CHR$(241)+CHR$(242) 
+60 LOCATE 18,13
+70 PRINT camion$

@@ -1,0 +1,16 @@
+10 MODE 0
+15 RAD
+20 numdetriang=INT(RND*100+1)
+30 FOR cuenta=l TO numdetriang
+40 izqx=INT(RND*640)
+50 derx=INT(RND*640)
+60 medx=INT(RND*640)
+70 izqy=INT(RND*400)
+80 dery=INT(RND*400)
+90 medy=INT(RND*400)
+100 color=INT(RND*16)
+110 MOVE izqx,izqy
+120 draw derx,dery,color
+130 draw medx,medy
+140 draw izqx,izqy
+150 NEXT

@@ -9,7 +9,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          ClsStatement, ClgStatement, RawExpression, IfStatement, GosubStatement, 
                          ReturnStatement, DimStatement, EndStatement, OriginStatement,
                          DataStatement, ReadStatement, RestoreStatement,
-                         InputStatement, SymbolStatement, FrameStatement,
+                         InputStatement, SymbolStatement, SymbolAfterStatement, FrameStatement,
                          StopStatement, WindowStatement, WhileStatement, WendStatement,
                          OnStatement, BorderStatement, ClearStatement, ClearInputStatement, RandomizeStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
@@ -1043,6 +1043,11 @@ class Interpreter:
                             self.display.update()
                             self.last_update = pygame.time.get_ticks()
                         pygame.time.wait(20)
+
+                elif isinstance(stmt, SymbolAfterStatement):
+                    limit = int(self.evaluate(stmt.limit))
+                    if hasattr(self, 'display') and hasattr(self.display, 'symbol_after'):
+                        self.display.symbol_after(limit)
 
                 elif isinstance(stmt, SymbolStatement):
                     char_code = int(self.evaluate(stmt.char_code))

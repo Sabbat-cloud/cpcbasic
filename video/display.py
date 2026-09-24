@@ -315,26 +315,34 @@ class Display:
         for char in str(text):
             char_code = ord(char)
             
+            is_literal = False
             if self.esc_state > 0:
                 # We reuse esc_state for multi-byte VDU commands
-                if self.esc_state == 14: # PAPER
-                    self.set_paper(char_code % 16, stream)
+                if self.esc_state == 1:
+                    is_literal = True
                     self.esc_state = 0
-                elif self.esc_state == 15: # PEN
-                    self.set_pen(char_code % 16, stream)
-                    self.esc_state = 0
-                elif self.esc_state == 22: # Transparent mode
-                    self.transparent_text = (char_code != 0)
-                    self.esc_state = 0
-                elif self.esc_state == 31: # LOCATE
-                    self.esc_args.append(char_code)
-                    if len(self.esc_args) == 2:
-                        self.locate(max(1, min(win_cols, self.esc_args[0])), max(1, min(win_rows, self.esc_args[1])), stream)
+                else:
+                    if self.esc_state == 14: # PAPER
+                        self.set_paper(char_code % 16, stream)
                         self.esc_state = 0
-                continue
+                    elif self.esc_state == 15: # PEN
+                        self.set_pen(char_code % 16, stream)
+                        self.esc_state = 0
+                    elif self.esc_state == 22: # Transparent mode
+                        self.transparent_text = (char_code != 0)
+                        self.esc_state = 0
+                    elif self.esc_state == 31: # LOCATE
+                        self.esc_args.append(char_code)
+                        if len(self.esc_args) == 2:
+                            self.locate(max(1, min(win_cols, self.esc_args[0])), max(1, min(win_rows, self.esc_args[1])), stream)
+                            self.esc_state = 0
+                    continue
                 
-            if char_code < 32:
-                if char_code == 7: # BEL
+            if char_code < 32 and not is_literal:
+                if char_code == 1:
+                    self.esc_state = 1
+                    continue
+                elif char_code == 7: # BEL
                     continue
                 elif char_code == 8: # BS (Left)
                     self.streams[stream]["text_col"] = max(1, self.streams[stream]["text_col"] - 1)
@@ -389,6 +397,17 @@ class Display:
                                 char_surface.set_at((c, r), (255,255,255))
                     char_surface = pygame.transform.scale(char_surface, (char_width, char_height))
                 else:
+                    if char_code < 32:
+                        mapping = {
+                            0: 9633, 1: 9214, 2: 9162, 3: 9164, 4: 9889, 5: 8864,
+                            6: 10003, 7: 9022, 8: 8592, 9: 8594, 10: 8595, 11: 8593,
+                            12: 8607, 13: 8626, 14: 8855, 15: 8857, 16: 8863,
+                            17: 9719, 18: 9718, 19: 9717, 20: 9716, 21: 9211,
+                            22: 9165, 23: 8867, 24: 10710, 25: 9215, 26: 9254,
+                            27: 8854, 28: 9712, 29: 9713, 30: 9714, 31: 9715
+                        }
+                        if char_code in mapping:
+                            char = chr(mapping[char_code])
                     try:
                         char_surface = self.font.render(char, False, (255,255,255), (0,0,0))
                         char_surface = pygame.transform.scale(char_surface, (char_width, char_height))

@@ -1,0 +1,30 @@
+10 MODE 1
+20 anchobarra=50
+30 anchomes=16
+40 anchorestante=anchobarra-anchomes
+50 posicionmes=anchorestante/2
+60 cerox=20
+70 xmax=639
+80 ceroy=50
+90 ymax=350
+100 MOVE cerox,ymax
+110 DRAW cerox,ceroy,1
+120 DRAW xmax,ceroy
+121 ORIGIN cerox,ceroy
+125 MOVE 0,0
+130 TAG
+140 FOR mes=1 TO 12
+150 READ mes$,ventas
+160 MOVE 0,0
+170 DRAW 0,ventas,3
+180 DRAW anchobarra,ventas
+190 DRAW anchobarra,0
+200 MOVE posicionmes,-16
+210 PRINT LEFT$(mes$,1);
+215 cerox=cerox+anchobarra
+216 ORIGIN cerox,ceroy
+220 NEXT
+230 DATA Enero,97,Febrero,130,Marzo,141,Abri1,155,Mayo,210,Junio,276
+240 DATA Julio,240,Agosto,223,Septiembre,112,Octubre,99,Noviembre,84,Diciembre,76
+
+

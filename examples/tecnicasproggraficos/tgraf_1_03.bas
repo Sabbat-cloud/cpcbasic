@@ -1,0 +1,10 @@
+1 MODE 2
+10 x=100:y=100
+20 maximo=300
+30 incremento=10
+40 FOR numero=0 TO maximo STEP incremento 
+50   MOVE x+numero,y
+60   DRAW x+maximo,y+numero 
+70   MOVE x,y+numero
+80   DRAW x+numero,y+maximo 
+90 NEXT

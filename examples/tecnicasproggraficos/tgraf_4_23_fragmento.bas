@@ -1,0 +1,3 @@
+1 DEFINT c,f,l,o,s,x,y
+2 SPEED KEY 2,2
+89 SPEED KEY 10,5

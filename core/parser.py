@@ -81,6 +81,10 @@ class SymbolStatement(Statement):
         self.char_code = char_code
         self.matrix = matrix
 
+class SymbolAfterStatement(Statement):
+    def __init__(self, limit):
+        self.limit = limit
+
 class FrameStatement(Statement):
     pass
 
@@ -659,6 +663,10 @@ class Parser:
 
             elif self.current_token.value == 'SYMBOL':
                 self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'AFTER':
+                    self.eat(KEYWORD)
+                    limit = self.parse_expression()
+                    return SymbolAfterStatement(limit)
                 char_code = self.parse_expression()
                 self.eat(SYMBOL) # ,
                 matrix = []
