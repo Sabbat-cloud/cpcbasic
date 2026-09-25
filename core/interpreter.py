@@ -281,15 +281,16 @@ class Interpreter:
                     
             try:
                 class ArrayWrapper:
-                    def __init__(self, arr_dict):
+                    def __init__(self, arr_dict, is_string):
                         self.arr_dict = arr_dict
+                        self.is_string = is_string
                     def __call__(self, *args):
-                        return self.arr_dict.get(tuple(int(a) for a in args), 0)
+                        return self.arr_dict.get(tuple(int(a) for a in args), "" if self.is_string else 0)
                 
                 eval_globals = self.builtins.copy()
                 for arr_name, arr_dict in self.arrays.items():
                     safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
-                    eval_globals[safe_name] = ArrayWrapper(arr_dict)
+                    eval_globals[safe_name] = ArrayWrapper(arr_dict, arr_name.endswith('$'))
                 for fn_name, fn_func in self.user_functions.items():
                     eval_globals[f"USER_FN_{fn_name}"] = fn_func
                     
@@ -581,7 +582,7 @@ class Interpreter:
                         target = int(self.evaluate(stmt.line_numbers[val - 1]))
                         if target in self.program.lines:
                             if stmt.is_gosub:
-                                self.gosub_stack.append((next_pc, False))
+                                self.gosub_stack.append((self.pc, stmt_idx, False))
                             next_pc = target
                             break
                         else:
@@ -642,7 +643,7 @@ class Interpreter:
                 elif isinstance(stmt, GosubStatement):
                     target = int(self.evaluate(stmt.line_number))
                     if target in self.program.lines:
-                        self.gosub_stack.append((next_pc, False))
+                        self.gosub_stack.append((self.pc, stmt_idx, False))
                         next_pc = target
                         break
                     else:
@@ -653,7 +654,10 @@ class Interpreter:
                     if self.gosub_stack:
                         ret_val = self.gosub_stack.pop()
                         if isinstance(ret_val, tuple):
-                            next_pc, is_interrupt = ret_val
+                            if len(ret_val) == 3:
+                                next_pc, self.next_stmt_idx, is_interrupt = ret_val
+                            else:
+                                next_pc, is_interrupt = ret_val
                             if is_interrupt:
                                 self.interrupts_enabled = True
                         else:

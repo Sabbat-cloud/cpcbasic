@@ -549,8 +549,11 @@ class Parser:
             elif self.current_token.value == 'DATA':
                 self.eat(KEYWORD)
                 values = []
+                just_ate_comma = False
                 while True:
                     if self.current_token.type in (EOF, NEWLINE) or (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                        if just_ate_comma:
+                            values.append(Literal("", STRING))
                         break
                     
                     tokens = []
@@ -584,9 +587,12 @@ class Parser:
                                     values.append(Literal(s, STRING))
                             else:
                                 values.append(Literal(s, STRING))
+                    else:
+                        values.append(Literal("", STRING))
                     
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
+                        just_ate_comma = True
                     else:
                         break
                 return DataStatement(values)

@@ -27,9 +27,11 @@ KEYWORDS = {
 token_specification = [
     ('HEX_NUMBER', r'&[0-9A-Fa-f]+'),      
     ('NUMBER',   r'\d+(\.\d*)?([eE][+-]?\d+)?'), 
-    ('STRING',   r'".*?"'),                
+    ('STRING',   r'".*?(?:"|$)'),                
+    ('COMMENT',  r"\bREM\b.*"),
+    ('APOSTROPHE', r"'"),
     ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_]*[%!\$]?'), 
-    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@]'), 
+    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@\.]'), 
     ('NEWLINE',  r'\n'),                   
     ('SKIP',     r'[ \t\r]+'),               
     ('MISMATCH', r'.'),                    
@@ -84,18 +86,8 @@ class Lexer:
             line_num = line_num_zero + 1
             line_start = 0
             
-            # Check for REM or ' comment
-            rem_match = re.search(r'\bREM\b', line_code, re.IGNORECASE)
-            tick_match = line_code.find("'")
-            
-            comment_start = -1
-            if rem_match:
-                comment_start = rem_match.start()
-            if tick_match != -1 and (comment_start == -1 or tick_match < comment_start):
-                comment_start = tick_match
-                
-            code_to_parse = line_code if comment_start == -1 else line_code[:comment_start]
-            
+            code_to_parse = line_code
+            in_data = False
             for mo in re.finditer(tok_regex, code_to_parse, re.IGNORECASE):
                 kind = mo.lastgroup
                 value = mo.group()
@@ -103,12 +95,26 @@ class Lexer:
                 
                 if kind == 'NUMBER':
                     pass
+                elif kind == 'COMMENT':
+                    continue
+                elif kind == 'APOSTROPHE':
+                    if in_data:
+                        kind = 'MISMATCH'
+                    else:
+                        break
+                elif kind == 'SYMBOL' and value == ':':
+                    in_data = False
                 elif kind == 'IDENTIFIER':
                     value = value.upper()
                     if value in KEYWORDS:
                         kind = 'KEYWORD'
+                        if value == 'DATA':
+                            in_data = True
                 elif kind == 'STRING':
-                    value = value[1:-1] 
+                    if value.endswith('"') and len(value) > 1:
+                        value = value[1:-1]
+                    else:
+                        value = value[1:]
                 elif kind == 'SKIP':
                     continue
                 elif kind == 'MISMATCH':
@@ -128,9 +134,7 @@ class Lexer:
                 
                 self.tokens.append(Token(kind, value, line_num, column))
                 
-            # Treat comment as a token if needed, but usually we just skip it
-            if comment_start != -1:
-                pass # Skipping comment
+            # Comments are now handled by the regex lexer
             
             # Add newline token to separate statements, unless it's the last line and empty
             self.tokens.append(Token(NEWLINE, '\n', line_num, len(line_code)))
