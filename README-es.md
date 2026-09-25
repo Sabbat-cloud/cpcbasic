@@ -27,6 +27,7 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 **⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa temprana de desarrollo. Muchas características podrían fallar.**
 
+
 ## Instalación
 
 1. Clona este repositorio.
@@ -42,7 +43,7 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 ## Uso
 
-Puedes ejecutar el emulador pasándole un script basic como argumento. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`.
+Puedes ejecutar el emulador pasándole un script BASIC como argumento. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`.
 
 ```bash
 python main.py examples/matrix.cpcbas --scale 3
@@ -64,8 +65,16 @@ Revisa la carpeta `examples/` para probar las capacidades del emulador. Algunos 
 - **`movimiento.cpcbas` y `teclado.cpcbas`**: Demos gráficas interactuando con el búfer de teclado en tiempo real.
 - **`sprite.cpcbas`**: Creación de gráficos definidos por el usuario con `SYMBOL`.
 - **`circulos.cpcbas`, `figura3.cpcbas`, `cuadrados.cpcbas`**: Extensas pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
+- **`tecnicasproggraficos/`**: Dentro de `examples/` tenéis multitud de ejemplos, incluido el listado completo con todos los ejemplos del libro *"Técnicas de programación gráfica"* en `examples/tecnicasproggraficos/`.
+- **Ejemplos del Manual Oficial**: Gracias a las últimas actualizaciones en variables de cadena y matemáticas, la mayoría de los ejemplos sencillos del *Manual de Usuario de Locomotive BASIC* pueden probarse directamente (por ejemplo, pegándolos en `temp_run.cpcbas`) y funcionarán a la primera.
 
-- **Ejemplos del Manual Oficial**: Gracias a las últimas actualizaciones en variables de cadena y matemáticas, la mayoría de los ejemplos sencillos del *Manual de Usuario de Locomotive BASIC* pueden probarse directamente (por ejemplo, pegándolos en 	emp_run.cpcbas) y funcionarán a la primera.
+## ¿Por qué?
+La respuesta corta es por diversión. Crecí con el BASIC del Amstrad CPC y a veces me apetecía probar pequeñas cosas, ya sea por nostalgia o curiosidad, y poder acceder al BASIC sin tener que cargar todo el entorno del emulador me parecía práctico.
+Se pueden editar los listados con el programa que quieras sin tener que depender del emulador, montar unidades de disco, etc.
+Actualmente ya está soportado el acceso aleatorio a ficheros, con lo que podemos escribir, leer y modificar cualquier fichero de nuestro PC para procesarlo con nuestros programas en BASIC.
+Por supuesto, también está la ausencia de limitación de memoria y el aumento de la velocidad.
+Sus carencias más obvias son la falta de llamadas directas al firmware o código máquina. Aunque `CALL &BB18` y otros que iré poniendo funcionarán, no son llamadas reales: simulan la instrucción.
+
 
 ## Créditos y Agradecimientos
 - Tipografía: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)
