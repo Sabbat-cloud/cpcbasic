@@ -1,0 +1,26 @@
+10 MODE 1
+20 PRINT "Test de SOUND Avanzado (Hold, Release, SQ)"
+30 PRINT "==========================================="
+40 ' Canal A (1) con Hold (Bit 6 = 64) -> 1 + 64 = 65
+50 PRINT "Encolando Sonido A en Hold (Silencio)..."
+60 SOUND 65, 200, 100, 15
+70 GOSUB 200
+80 ' Canal B (2) con Hold (Bit 6 = 64) -> 2 + 64 = 66
+90 PRINT "Encolando Sonido B en Hold (Silencio)..."
+100 SOUND 66, 300, 100, 15
+110 GOSUB 200
+120 ' Canal C (4) con Hold (Bit 6 = 64) -> 4 + 64 = 68
+130 PRINT "Encolando Sonido C en Hold (Silencio)..."
+140 SOUND 68, 400, 100, 15
+150 GOSUB 200
+160 PRINT "Liberando todos los canales al mismo tiempo (RELEASE 7)!"
+170 RELEASE 7
+180 GOSUB 200
+190 END
+200 ' Rutina de estado de SQ
+210 S_A = SQ(1)
+220 S_B = SQ(2)
+230 S_C = SQ(4)
+240 PRINT "Estado SQ -> A:"; S_A; "B:"; S_B; "C:"; S_C
+250 FOR I=1 TO 5000: NEXT I
+260 RETURN

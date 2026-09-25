@@ -15,7 +15,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement, ReleaseStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -84,7 +84,7 @@ class Interpreter:
             "MID_STR": lambda s, start, n=None: s[int(start)-1:int(start)-1+int(n)] if n is not None else s[int(start)-1:],
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
-            "SQ": lambda x: 0,  # stub for sound queue status
+            "SQ": lambda x: self.sound.get_sq_status(int(x)),
             "LEN": len,
             "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
             "REMAIN": lambda x: 0,
@@ -234,14 +234,16 @@ class Interpreter:
                             next_idx = i + 2 if skip_next else i + 1
                             if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                 s += "()"
-                    elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
-                        s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     elif val_upper in self.user_functions:
                         s += f"USER_FN_{val_upper}"
                         # If called without parenthesis, add them
                         next_idx = i + 2 if skip_next else i + 1
                         if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                             s += "()"
+                    elif t.value in self.arrays or ((i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '('):
+                        if t.value not in self.arrays:
+                            self.arrays[t.value] = {}
+                        s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     else:
                         val = self.variables.get(t.value, self.get_default_value(t.value))
                         if isinstance(val, str):
@@ -988,6 +990,10 @@ class Interpreter:
                     self.running = False
                     break
 
+                elif isinstance(stmt, ReleaseStatement):
+                    channels = int(self.evaluate(stmt.channels))
+                    self.sound.release_channels(channels)
+
                 elif type(stmt).__name__ == 'OpenInStatement':
                     filename = str(self.evaluate(stmt.filename))
                     if not hasattr(self, 'file_in'): self.file_in = {}
@@ -1104,6 +1110,7 @@ class Interpreter:
             
             self.display.update()
             self.display.process_events()
+            self.sound.update_queues()
             
             self.pc = next_pc
         
@@ -1111,4 +1118,6 @@ class Interpreter:
         while True:
             self.display.process_events()
             self.display.update()
+            self.sound.update_queues()
+            pygame.time.wait(10)
 

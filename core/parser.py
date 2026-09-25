@@ -178,6 +178,10 @@ class CloseInStatement(Statement):
 class CloseOutStatement(Statement):
     pass
 
+class ReleaseStatement(Statement):
+    def __init__(self, channels):
+        self.channels = channels
+
 class PokeStatement(Statement):
     def __init__(self, address, value):
         self.address = address
@@ -656,6 +660,11 @@ class Parser:
             elif self.current_token.value == 'STOP':
                 self.eat(KEYWORD)
                 return StopStatement()
+
+            elif self.current_token.value == 'RELEASE':
+                self.eat(KEYWORD)
+                channels = self.parse_expression()
+                return ReleaseStatement(channels)
 
             elif self.current_token.value == 'SYMBOL':
                 self.eat(KEYWORD)
