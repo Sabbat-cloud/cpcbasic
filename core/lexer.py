@@ -25,7 +25,8 @@ KEYWORDS = {
 }
 
 token_specification = [
-    ('HEX_NUMBER', r'&[0-9A-Fa-f]+'),      
+    ('BIN_NUMBER', r'&[Xx][0-1]+'),
+    ('HEX_NUMBER', r'&[Hh]?[0-9A-Fa-f]+'),      
     ('NUMBER',   r'\d+(\.\d*)?([eE][+-]?\d+)?'), 
     ('STRING',   r'".*?(?:"|$)'),                
     ('COMMENT',  r"\bREM\b.*"),

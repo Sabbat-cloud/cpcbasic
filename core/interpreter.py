@@ -209,7 +209,11 @@ class Interpreter:
             elif expr.type == 'STRING':
                 return expr.value
             elif expr.type == 'HEX_NUMBER':
-                return int(expr.value[1:], 16)
+                val = expr.value[1:].upper()
+                if val.startswith('H'): val = val[1:]
+                return int(val, 16)
+            elif expr.type == 'BIN_NUMBER':
+                return int(expr.value[2:], 2)
         elif isinstance(expr, RawExpression):
             s = ""
             skip_next = False
@@ -250,7 +254,11 @@ class Interpreter:
                         else:
                             s += str(val)
                 elif t.type == 'HEX_NUMBER':
-                    s += "0x" + t.value[1:]
+                    val = t.value[1:].upper()
+                    if val.startswith('H'): val = val[1:]
+                    s += "0x" + val
+                elif t.type == 'BIN_NUMBER':
+                    s += "0b" + t.value[2:]
                 elif t.type == 'SYMBOL' and t.value == '=':
                     s += '=='
                 elif t.type == 'SYMBOL' and t.value == '<>':
@@ -1040,8 +1048,16 @@ class Interpreter:
                     if stmt.variables:
                         var = stmt.variables[0]
                         if not var.endswith('$'):
+                            val_str = val.strip().upper()
                             try:
-                                val = float(val) if '.' in val else int(val)
+                                if val_str.startswith('&X'):
+                                    val = int(val_str[2:], 2)
+                                elif val_str.startswith('&H'):
+                                    val = int(val_str[2:], 16)
+                                elif val_str.startswith('&'):
+                                    val = int(val_str[1:], 16)
+                                else:
+                                    val = float(val) if '.' in val else int(val)
                             except ValueError:
                                 val = 0
                         self.variables[var] = val
