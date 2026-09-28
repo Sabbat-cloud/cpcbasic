@@ -287,6 +287,11 @@ class Interpreter:
                 else:
                     s += str(t.value)
                     
+            open_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == '(')
+            close_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == ')')
+            if open_parens > close_parens:
+                s += ')' * (open_parens - close_parens)
+                
             try:
                 class ArrayWrapper:
                     def __init__(self, arr_dict, is_string):
