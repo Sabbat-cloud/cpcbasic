@@ -1,0 +1,61 @@
+10 MODE 1
+20 PRINT "Melodia: Oda a la Alegria (Retro CPC 8-bit)"
+30 PRINT "==========================================="
+40 PRINT "Generando sonido usando ENV, ENT, HOLD, RELEASE y NOISE..."
+50 
+60 ' --- ENVOLVENTES ---
+70 ' ENV 1: Volumen principal (Ataque corto, caida gradual)
+80 ' Secciones: 5 pasos de +2, 10 pasos de -1
+90 ENV 1, 5, 2, 2, 10, -1, 5
+100 ' ENV 2: Volumen percusion (Decaimiento muy rapido)
+110 ENV 2, 15, -1, 1
+120 ' ENT 1: Vibrato suave para el tono principal
+130 ENT 1, 5, 1, 3, 5, -1, 3
+140 ' ENT 2: Caida asimetrica (Efecto Kick drum)
+150 ENT 2, 10, 10, 1
+160 
+170 ' --- DATOS DE LA MELODIA ---
+180 ' Notas de "Oda a la alegria" (Periodo = 62500 / Frecuencia)
+190 ' E, E, F, G (Tono, Bajo, Ruido)
+200 DATA 190, 480, 10
+210 DATA 190, 318, 0
+220 DATA 179, 480, 5
+230 DATA 159, 318, 0
+240 ' G, F, E, D
+250 DATA 159, 480, 15
+260 DATA 179, 318, 0
+270 DATA 190, 480, 5
+280 DATA 213, 318, 0
+290 ' C, C, D, E
+300 DATA 239, 480, 10
+310 DATA 239, 318, 0
+320 DATA 213, 480, 5
+330 DATA 190, 318, 0
+340 ' E, D, D (Final alargado)
+350 DATA 190, 480, 15
+360 DATA 213, 318, 0
+370 DATA 213, 480, 5
+380 
+390 ' Bucle de reproduccion
+400 FOR I=1 TO 15
+410 READ T_MAIN, T_BASS, N_DRUM
+420 
+430 ' Duracion base
+440 DUR = 20
+450 IF I = 15 THEN DUR = 40
+460 
+470 ' Canal A (1) + Hold (64) = 65 -> Melodia principal
+480 SOUND 65, T_MAIN, DUR, 14, 1, 1, 0
+490 
+500 ' Canal B (2) + Hold (64) = 66 -> Bajo acompanamiento
+510 SOUND 66, T_BASS, DUR, 10, 1, 0, 0
+520 
+530 ' Canal C (4) + Hold (64) = 68 -> Bateria/Percusion
+540 IF N_DRUM > 0 THEN SOUND 68, 0, DUR, 12, 2, 2, N_DRUM ELSE SOUND 68, 0, DUR, 0, 0, 0, 0
+550 
+560 ' Sincronizar el arranque del acorde
+570 RELEASE 7
+580 NEXT I
+590 
+600 PRINT "Fin de la transmision sonora."
+610 END

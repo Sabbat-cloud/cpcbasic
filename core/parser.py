@@ -367,6 +367,10 @@ class SoundStatement(Statement):
         self.ent = ent
         self.noise = noise
 
+class ReleaseStatement(Statement):
+    def __init__(self, channels):
+        self.channels = channels
+
 class Expr(ASTNode):
     pass
 
@@ -1270,6 +1274,12 @@ class Parser:
                     args.append(None)
                     
                 return SoundStatement(args[0], args[1], args[2], args[3], args[4], args[5], args[6])
+
+            elif self.current_token.value == 'RELEASE':
+                self.eat(KEYWORD)
+                channels = self.parse_expression()
+                return ReleaseStatement(channels)
+
         elif self.current_token.type == SYMBOL and self.current_token.value == '|':
             self.eat(SYMBOL)
             if self.current_token.type == IDENTIFIER:

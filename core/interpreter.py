@@ -15,7 +15,7 @@ from core.parser import (Program, PrintStatement, LetStatement, GotoStatement,
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement, ReleaseStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -84,7 +84,7 @@ class Interpreter:
             "MID_STR": lambda s, start, n=None: s[int(start)-1:int(start)-1+int(n)] if n is not None else s[int(start)-1:],
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
-            "SQ": lambda x: 0,  # stub for sound queue status
+            "SQ": lambda x: self.sound.get_sq_status(int(x)),
             "LEN": len,
             "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
             "TESTR": lambda x, y: self.display.test(self.display.graphics_x + x, self.display.graphics_y + y) if hasattr(self.display, 'test') else 0,
@@ -896,6 +896,10 @@ class Interpreter:
                     noise = int(self.evaluate(stmt.noise)) if stmt.noise else 0
                     print(f"[AUDIO] SOUND {channel},{period},{duration},{volume}")
                     self.sound.play_sound(channel, period, duration, volume, env, ent, noise)
+                    
+                elif isinstance(stmt, ReleaseStatement):
+                    channels = int(self.evaluate(stmt.channels))
+                    self.sound.release_channels(channels)
                     
                 elif isinstance(stmt, IfStatement):
                     cond_val = self.evaluate(stmt.condition)
