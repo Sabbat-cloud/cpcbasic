@@ -467,7 +467,53 @@ class Display:
     def _cpc_to_screen(self, x, y):
         screen_x = self.origin_x + x
         screen_y = self.logical_height - 1 - (self.origin_y + y)
+        if self.mode == 0:
+            screen_x = (screen_x // 4) * 4
+        elif self.mode == 1:
+            screen_x = (screen_x // 2) * 2
+        screen_y = (screen_y // 2) * 2
         return int(screen_x), int(screen_y)
+
+    def set_graphics_window(self, left, right, top, bottom):
+        # Window coordinates are absolute (relative to bottom-left of physical screen)
+        sy1 = self.logical_height - 1 - top
+        sy2 = self.logical_height - 1 - bottom
+        
+        sx1 = left
+        sx2 = right
+        
+        if self.mode == 0:
+            sx1 = (sx1 // 4) * 4
+            sx2 = (sx2 // 4) * 4
+        elif self.mode == 1:
+            sx1 = (sx1 // 2) * 2
+            sx2 = (sx2 // 2) * 2
+            
+        sy1 = (sy1 // 2) * 2
+        sy2 = (sy2 // 2) * 2
+        
+        min_x = min(sx1, sx2)
+        max_x = max(sx1, sx2)
+        min_y = min(sy1, sy2)
+        max_y = max(sy1, sy2)
+        
+        if self.mode == 0:
+            max_x += 4
+        elif self.mode == 1:
+            max_x += 2
+        else:
+            max_x += 1
+        max_y += 2
+        
+        self.graphics_clip_rect = pygame.Rect(min_x, min_y, max_x - min_x, max_y - min_y)
+
+    def clear_graphics_window(self):
+        rect = getattr(self, 'graphics_clip_rect', None)
+        if rect:
+            pygame.draw.rect(self.logical_surface, self.graphics_paper, rect)
+        else:
+            pygame.draw.rect(self.logical_surface, self.graphics_paper, self.logical_surface.get_rect())
+
 
     def move(self, x, y):
         self.graphics_x = x
@@ -487,7 +533,11 @@ class Display:
             pw, ph = 1, 2
             
         rect = pygame.Rect(sx, sy, pw, ph)
+        old_clip = self.logical_surface.get_clip()
+        if hasattr(self, 'graphics_clip_rect'):
+            self.logical_surface.set_clip(self.graphics_clip_rect)
         pygame.draw.rect(self.logical_surface, pen, rect)
+        self.logical_surface.set_clip(old_clip)
 
     def draw(self, x, y, pen=None):
         if pen is None:
@@ -496,6 +546,9 @@ class Display:
         start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
         end_x, end_y = self._cpc_to_screen(x, y)
         
+        old_clip = self.logical_surface.get_clip()
+        if hasattr(self, 'graphics_clip_rect'):
+            self.logical_surface.set_clip(self.graphics_clip_rect)
         if self.mode == 0: width = 4
         elif self.mode == 1: width = 2
         else: width = 1
@@ -539,11 +592,15 @@ class Display:
                     err += dx
                     cy += sy
                     
+        self.logical_surface.set_clip(old_clip)
         self.move(x, y)
 
     def fill(self, pen=None):
         if pen is None:
             pen = self.current_pen
+        old_clip = self.logical_surface.get_clip()
+        if hasattr(self, 'graphics_clip_rect'):
+            self.logical_surface.set_clip(self.graphics_clip_rect)
         start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
         if start_x < 0 or start_x >= self.logical_width or start_y < 0 or start_y >= self.logical_height:
             return
@@ -555,18 +612,27 @@ class Display:
         queue = [(start_x, start_y)]
         visited = set()
         
+        if self.mode == 0:
+            dx, dy = 4, 2
+        elif self.mode == 1:
+            dx, dy = 2, 2
+        else:
+            dx, dy = 1, 2
+            
         while queue:
             x, y = queue.pop(0)
             if (x, y) in visited: continue
             visited.add((x, y))
             
             if self.logical_surface.get_at_mapped((x, y)) == target_pen:
-                self.logical_surface.set_at((x, y), pen)
-                if x > 0: queue.append((x-1, y))
-                if x < self.logical_width - 1: queue.append((x+1, y))
-                if y > 0: queue.append((x, y-1))
-                if y < self.logical_height - 1: queue.append((x, y+1))
+                rect = pygame.Rect(x, y, dx, dy)
+                pygame.draw.rect(self.logical_surface, pen, rect)
+                if x >= dx: queue.append((x-dx, y))
+                if x < self.logical_width - dx: queue.append((x+dx, y))
+                if y >= dy: queue.append((x, y-dy))
+                if y < self.logical_height - dy: queue.append((x, y+dy))
 
+        self.logical_surface.set_clip(old_clip)
     def test(self, x, y):
         sx, sy = self._cpc_to_screen(x, y)
         if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:

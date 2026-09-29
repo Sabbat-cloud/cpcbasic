@@ -66,9 +66,9 @@ class Interpreter:
             "SIN": lambda x: math.sin(math.radians(x) if self.angle_mode == 'DEG' else x),
             "COS": lambda x: math.cos(math.radians(x) if self.angle_mode == 'DEG' else x),
             "TAN": lambda x: math.tan(math.radians(x) if self.angle_mode == 'DEG' else x),
-            "INT": int,
+            "INT": math.floor,
             "ABS": abs,
-            "RND": cpc_rnd,
+            "RND": self.cpc_rnd,
             "PI": math.pi,
             "TIME": lambda: int(pygame.time.get_ticks() / 3.33) if 'pygame' in sys.modules else 0,
             "XPOS": lambda: self.display.graphics_x,
@@ -92,11 +92,11 @@ class Interpreter:
             "INKEY": lambda key: self.display.get_inkey_state(int(key)),
             "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
             "CREAL": float,
-            "CINT": lambda x: int(round(x)),
+            "CINT": lambda x: int(self.cpc_round(x)),
             "ERR": lambda: self.err_code,
             "ERL": lambda: self.err_line,
             "FIX": int,
-            "ROUND": lambda x, d=0: round(x, d) if d > 0 else int(round(x, d)),
+            "ROUND": lambda x, d=0: self.cpc_round(x, d) if d > 0 else int(self.cpc_round(x, d)),
             "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
             "LEFT_STR": lambda s, n: s[:int(n)] if int(n) > 0 else "",
             "UPPER_STR": lambda s: s.upper(),
@@ -118,6 +118,25 @@ class Interpreter:
             "EOF": self.check_eof
         }
         
+    def cpc_rnd(self, x=None):
+        if x is not None:
+            if x < 0:
+                random.seed(x)
+                self.last_rnd = random.random()
+            elif x == 0:
+                if not hasattr(self, 'last_rnd'):
+                    self.last_rnd = random.random()
+                return self.last_rnd
+            else:
+                self.last_rnd = random.random()
+        else:
+            self.last_rnd = random.random()
+        return self.last_rnd
+
+    def cpc_round(self, x, d=0):
+        m = 10 ** d
+        return math.floor(x * m + 0.5) / m if d > 0 else math.floor(x + 0.5)
+
     def check_eof(self):
         if not hasattr(self, 'file_in') or 9 not in self.file_in:
             return -1
@@ -449,7 +468,10 @@ class Interpreter:
                     self.display.locate(1, 1, stream)
 
                 elif isinstance(stmt, ClgStatement):
-                    self.display.clear_graphics()
+                    if hasattr(self.display, 'clear_graphics_window'):
+                        self.display.clear_graphics_window()
+                    else:
+                        self.display.clear_graphics()
 
                 elif isinstance(stmt, BorderStatement):
                     col1 = int(self.evaluate(stmt.color1))
@@ -769,6 +791,13 @@ class Interpreter:
                     y = int(self.evaluate(stmt.y))
                     self.display.origin_x = x
                     self.display.origin_y = y
+                    if stmt.left is not None:
+                        left = int(self.evaluate(stmt.left))
+                        right = int(self.evaluate(stmt.right))
+                        top = int(self.evaluate(stmt.top))
+                        bottom = int(self.evaluate(stmt.bottom))
+                        if hasattr(self.display, 'set_graphics_window'):
+                            self.display.set_graphics_window(left, right, top, bottom)
 
                 elif isinstance(stmt, FillStatement):
                     pen = int(self.evaluate(stmt.pen))
