@@ -336,23 +336,35 @@ class Interpreter:
                 if current_time - getattr(self, 'last_update', 0) >= 20:
                     self.display.update()
                     self.last_update = current_time
-            # -- Timer Interrupt Check (AFTER / EVERY) --
+            # -- Timer Interrupt Check (AFTER / EVERY / SQ) --
             current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
             interrupt_triggered = False
             if self.interrupts_enabled:
-                for t_id in range(4):
-                    t_info = self.timers.get(t_id)
-                    if t_info and current_time >= t_info['next_trigger']:
-                        # Trigger interrupt: save current PC, jump to target line
-                        self.gosub_stack.append((self.pc, True))
-                        self.pc = t_info['target']
-                        self.interrupts_enabled = False # Implicit DI
-                        if t_info['type'] == 'EVERY':
-                            t_info['next_trigger'] = current_time + t_info['delay_ms']
-                        else:
-                            self.timers[t_id] = None
-                        interrupt_triggered = True
-                        break # Execute only one interrupt at a time
+                if hasattr(self, 'sq_timers'):
+                    for channel, target in list(self.sq_timers.items()):
+                        status = self.sound.get_sq_status(channel)
+                        if (status & 7) > 0:
+                            self.gosub_stack.append((self.pc, True))
+                            self.pc = target
+                            self.interrupts_enabled = False
+                            del self.sq_timers[channel]
+                            interrupt_triggered = True
+                            break
+                            
+                if not interrupt_triggered:
+                    for t_id in range(4):
+                        t_info = self.timers.get(t_id)
+                        if t_info and current_time >= t_info['next_trigger']:
+                            # Trigger interrupt: save current PC, jump to target line
+                            self.gosub_stack.append((self.pc, True))
+                            self.pc = t_info['target']
+                            self.interrupts_enabled = False # Implicit DI
+                            if t_info['type'] == 'EVERY':
+                                t_info['next_trigger'] = current_time + t_info['delay_ms']
+                            else:
+                                self.timers[t_id] = None
+                            interrupt_triggered = True
+                            break # Execute only one interrupt at a time
             
             if interrupt_triggered:
                 continue
@@ -610,8 +622,13 @@ class Interpreter:
                 elif isinstance(stmt, OnSqStatement):
                     channel = int(self.evaluate(stmt.channel)) if stmt.channel else 1
                     target_line = int(self.evaluate(stmt.line_number))
-                    # Just map it to a timer for now or stub it
-                    pass
+                    if not hasattr(self, 'sq_timers'):
+                        self.sq_timers = {}
+                    if target_line == 0:
+                        if channel in self.sq_timers:
+                            del self.sq_timers[channel]
+                    else:
+                        self.sq_timers[channel] = target_line
 
                 elif isinstance(stmt, ErrorStatement):
                     code = int(self.evaluate(stmt.code))

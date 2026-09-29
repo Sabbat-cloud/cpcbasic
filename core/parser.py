@@ -1240,23 +1240,23 @@ class Parser:
                 self.eat(KEYWORD)
                 return RadStatement()
 
-            elif self.current_token.value == 'ENV':
+            elif self.current_token.value in ('ENV', 'ENT'):
+                is_ent = (self.current_token.value == 'ENT')
                 self.eat(KEYWORD)
                 env_no = self.parse_expression()
                 sections = []
                 while self.current_token.type == SYMBOL and self.current_token.value == ',':
                     self.eat(SYMBOL)
-                    sections.append(self.parse_expression())
-                return EnvStatement(env_no, sections)
-
-            elif self.current_token.value == 'ENT':
-                self.eat(KEYWORD)
-                ent_no = self.parse_expression()
-                sections = []
-                while self.current_token.type == SYMBOL and self.current_token.value == ',':
-                    self.eat(SYMBOL)
-                    sections.append(self.parse_expression())
-                return EntStatement(ent_no, sections)
+                    if self.current_token.type == SYMBOL and self.current_token.value == '=':
+                        self.eat(SYMBOL)
+                        sections.append(Literal('0', 'NUMBER'))
+                        sections.append(self.parse_expression())
+                    else:
+                        sections.append(self.parse_expression())
+                if is_ent:
+                    return EntStatement(env_no, sections)
+                else:
+                    return EnvStatement(env_no, sections)
 
             elif self.current_token.value == 'SOUND':
                 self.eat(KEYWORD)

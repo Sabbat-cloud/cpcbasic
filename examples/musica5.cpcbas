@@ -1,0 +1,14 @@
+10 cls
+20 print "Elija el numero de saltos (0-127)"
+30 input numsaltos
+40 print "Elija tamaño del salto (-128 a +127)"
+50 input tamsalto
+60 print "Elija tiempo de pausa (0-255)"
+70 input tiempopausa
+80 env 1,numsaltos,tamsalto,tiempopausa
+90 sound 1,240,15,15,1,1,0
+100 env 1
+110 print "Pulse una tecla para continuar"
+120 x$=inkey$:if x$="" then 120
+130 goto 10
+

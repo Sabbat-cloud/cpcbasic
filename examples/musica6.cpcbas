@@ -1,0 +1,13 @@
+10 cls
+20 print "Elija el numero de escalones (0-239)"
+30 input numesc
+40 print "Elija tamaño de escalones (-128 a +127)"
+50 input tamaesc
+60 print "Elija duracion de escalones (0-255)"
+70 input duraesc
+80 ent 1, numesc,tamaesc,duraesc
+90 sound 1,240,100,15,0,1,0
+100 ent 1
+110 print "Pulse una tecla para continuar
+120 pause 0
+130 goto 10
