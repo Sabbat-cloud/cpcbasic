@@ -1,5 +1,6 @@
 import pygame
 import sys
+from .font_rom import CPC_FONT
 
 CPC_PALETTE = [
     (0x00, 0x00, 0x00), # 0: Black
@@ -96,15 +97,7 @@ class Display:
         self.key_buffer = []
         self.tag_active = False
 
-        self.user_symbols = {
-            240: [8, 28, 62, 127, 8, 8, 8, 8],
-            241: [8, 8, 8, 8, 127, 62, 28, 8],
-            242: [8, 12, 14, 15, 14, 12, 8, 0],
-            243: [16, 48, 112, 240, 112, 48, 16, 0],
-            250: [24, 24, 24, 126, 24, 24, 36, 66],
-            251: [24, 24, 90, 60, 24, 24, 36, 66],
-            252: [24, 24, 24, 60, 90, 24, 36, 66],
-        }
+        self.user_symbols = CPC_FONT.copy()
 
     def _update_palette(self, flash_state):
         palette = [(0,0,0)] * 256
