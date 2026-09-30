@@ -1,0 +1,50 @@
+5 'AMTron 0.2b By Fabrizio Radica - www.retroacademy.it
+10 DEFINT a-z:pu=0
+15 'MODE 0:LOAD "main.scr":CALL &C7D0
+18 gosub 10010
+20 MODE 1:DIM arena(41,26):BORDER 0:INK 0,0
+30 CLS:x=5:xp=19:yp=11:y=5:vx=.5:vy=.5:s=1::sx=0:sy=-s:sp=1
+40 'LOAD "wall2.scr":CALL &C7D0:INK 1,26:INK 5,26,3
+45 LOCATE 1,25:PRINT "...SYST3M F4ILUR3...";
+50 FOR y=1 TO 24
+100 FOR x=1 TO 40
+150 arena(x,y)=0
+200 NEXT
+250 NEXT
+300 FOR x=1 TO 40:LOCATE x,1:arena(x,1)=1:arena(x,24)=1:PRINT CHR$(233);:LOCATE x,24:PRINT CHR$(233):NEXT
+320 FOR y=1 TO 24:LOCATE 1,y:arena(1,y)=1:arena(40,y)=1:PRINT CHR$(233);:LOCATE 40,y:PRINT CHR$(233):NEXT
+480 GOSUB 7000
+500 WHILE INKEY(18)<>0
+700 IF INKEY(0)=0 THEN sx=0:sy=-s
+800 IF INKEY(2)=0 THEN sx=0:sy=s
+900 IF INKEY(1)=0 THEN sy=0:sx=s
+1000 IF INKEY(8)=0 THEN sy=0:sx=-s
+1100 GOSUB 5000:vx=vx+sx:vy=vy+sy
+1200 WEND
+5000 ax=INT(xp+(vx/sp*0.5)):ay=INT(yp+(vy/sp*0.5))
+6000 PEN 2:LOCATE ax,ay:PRINT CHR$(233);:arena(ax,ay)=1:SOUND 1,300,1
+6100 IF arena(ax+sx,ay+sy)=1 THEN SOUND 1,800,10,15,2,10,1:GOTO 30
+6200 IF arena(ax+sx,ay+sy)=2 THEN pu=pu+1:LOCATE 1,25:PRINT pu;:arena(ax+sx,ay+sy)=0:LOCATE ax+sx,ay+sy:PRINT " ";: SOUND 1,100,5
+6700 RETURN
+7000 FOR b=1 TO 10
+7100 RANDOMIZE TIME:RANDOMIZE RND
+7200 x=2+(RND*36):xx=1+(RND*36)
+7300 y=2+(RND*22):yy=1+(RND*22)
+7400 PEN 2:LOCATE x,y:arena(x,y)=1:PRINT CHR$(232);
+7500 PEN 3:LOCATE xx,yy:arena(xx,yy)=2:PRINT CHR$(248);
+7600 NEXT b
+7700 RETURN
+10000 'MUSIC
+10010 dim muz(64,10)
+10020 for y=1 to 2:for x=1 to 16
+10030 read a:muz(x,y)=a
+10040 next:next
+10050 for l=1 to 4
+10060 for a=1 to 16:for n=1 to 2:for p=1 to 200:next:randomize time:randomize rnd:on muz(a,n) gosub 10110,10120,10130:next:next
+10070 restore 
+10080 next:return
+10090 data 1,1,2,1,1,1,2,1,1,1,2,1,1,1,2,1
+10100 data 3,,3,3,,3,,3,3,,3,,3,3,3,
+10110 sound 1,1000,5,15,1,1:return
+10120 sound 1,1000,5,15,1,1,5:return
+10130 sound 1,100+rnd(32)*64,1+rnd(8),10,1,1:return
