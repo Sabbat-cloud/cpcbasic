@@ -1,0 +1,5 @@
+10 for bocina = 1 to 3
+20 sound 1,239,80,15,1,2,1
+30 for pausa = 0 to 900:next
+50 next
+

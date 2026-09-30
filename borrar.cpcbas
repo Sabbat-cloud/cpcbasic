@@ -1,0 +1,5 @@
+10 FOR n=1 TO 8
+20 READ a$,c
+30 PRINT a$;" ";:SOUND 1,c:NEXT
+40 DATA en,478,todas,426,1as,379,escalas,358
+50 DATA musicales,319,hay,284,8,253,notas,239
