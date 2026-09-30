@@ -1,0 +1,11 @@
+10 REM programa cruce
+20 REM demuestra el uso del comando test
+30 CLS
+40 INK 0,13:INK 1,0
+50 MOVE 300,300
+60 DRAW 300,100
+70 FOR X=0 TO 640 step 2
+80 IF TEST(X,200)<>0 THEN 200
+90 PLOT X,200
+100 NEXT X
+200 STOP

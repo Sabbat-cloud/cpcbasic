@@ -206,6 +206,10 @@ class PrintStatement(Statement):
     def __init__(self, expressions):
         self.expressions = expressions
 
+class WriteStatement(Statement):
+    def __init__(self, expressions):
+        self.expressions = expressions
+
 class LetStatement(Statement):
     def __init__(self, identifier, expr):
         self.identifier = identifier
@@ -446,7 +450,8 @@ class Parser:
 
     def parse_statement(self):
         if self.current_token.type == KEYWORD:
-            if self.current_token.value == 'PRINT':
+            if self.current_token.value in ('PRINT', 'WRITE'):
+                is_write = (self.current_token.value == 'WRITE')
                 self.eat(KEYWORD)
                 stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
@@ -471,8 +476,7 @@ class Parser:
                             exprs.append(expr)
                         else:
                             break
-                # Monkey-patch stream into PrintStatement for interpreter
-                stmt = PrintStatement(exprs)
+                stmt = WriteStatement(exprs) if is_write else PrintStatement(exprs)
                 stmt.stream = stream
                 return stmt
             
@@ -655,8 +659,21 @@ class Parser:
                 variables = []
                 while True:
                     if self.current_token.type == IDENTIFIER:
-                        variables.append(self.current_token.value)
+                        var_name = self.current_token.value
                         self.eat(IDENTIFIER)
+                        if self.current_token.type == SYMBOL and self.current_token.value == '(':
+                            self.eat(SYMBOL)
+                            dims = []
+                            while True:
+                                dims.append(self.parse_expression())
+                                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                                    self.eat(SYMBOL)
+                                else:
+                                    break
+                            self.eat(SYMBOL) # )
+                            variables.append((var_name, dims))
+                        else:
+                            variables.append(var_name)
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
                     else:

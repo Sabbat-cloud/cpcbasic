@@ -1,0 +1,37 @@
+10 REM****PROGRAMA DIBUJO2D****
+20 REM genera un dibujo a partir de datos almacenados en formato fichero2d
+30 INPUT "NOMBRE DEL FICHERO";h$
+40 OPENIN h$
+50 REM define las matrices de puntos
+60 INPUT #9,npts
+70 DIM x(npts),y(npts)
+80 FOR i=1 TO npts
+90 INPUT #9,x(i):INPUT #9,y(i)
+100 NEXT i
+110 INPUT #9,li
+120 REM define las matrices de lineas
+130 DIM ln(2,li)
+140 FOR i=1 TO li
+150 INPUT #9,ln(1,i),ln(2,i)
+160 NEXT i
+170 REM file not closed yet
+180 REM ahora dibuja la figura
+190 CLS
+200 FOR i=1 TO li
+210 MOVE x(ln(1,i)),y(ln(1,i))
+220 DRAW x(ln(2,i)),y(ln(2,i))
+230 NEXT i
+240 REM APLICACIONES DE DIBUJO2D
+250 INPUT #9,SN
+260 DIM S(3,SN)
+270 FOR I=1 TO SN
+280 INPUT #9,S(1,I),S(2,I),S(3,I)
+290 NEXT I
+295 CLOSEIN
+300 REM AHORA DIBUJA EL SEGMENTO CAMBIE EL VALOR SEG PARA DIBUJAR OTRO SEGMENTO DISTINTO DEL 1
+310 SEG=1
+320 FOR I = S(1,SEG) TO S(2,SEG)
+330 MOVE X(LN(1,I)),Y(LN(1,I))
+340 DRAW X(LN(2,I)),Y(LN(2,I))
+350 NEXT I
+360 END

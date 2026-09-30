@@ -2,7 +2,7 @@ import math
 import random
 import sys
 import pygame
-from core.parser import (Program, PrintStatement, LetStatement, GotoStatement, 
+from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, GotoStatement, 
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
                          PlotStatement, DrawStatement, DrawrStatement, MoveStatement, MoverStatement, InkStatement,
                          PenStatement, PaperStatement, SoundStatement, LocateStatement, 
@@ -452,7 +452,24 @@ class Interpreter:
                             self.display.print_text(out_str + ("\r\n" if newline else ""), 0)
                         else:
                             self.display.print_text(out_str + ("\r\n" if newline else ""), stream)
-                    
+
+                elif isinstance(stmt, WriteStatement):
+                    out = []
+                    for expr in stmt.expressions:
+                        if isinstance(expr, Literal) and expr.type == 'SEPARATOR':
+                            continue
+                        val = self.evaluate(expr)
+                        if isinstance(val, str):
+                            out.append(f'"{val}"')
+                        else:
+                            out.append(str(val))
+                    out_str = ",".join(out)
+                    stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                    if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
+                        self.file_out[9].write(out_str + "\n")
+                    else:
+                        self.display.print_text(out_str + "\r\n", stream)
+
                 elif isinstance(stmt, LocateStatement):
                     col = int(self.evaluate(stmt.col))
                     row = int(self.evaluate(stmt.row)) if getattr(stmt, 'row', None) else None
@@ -744,7 +761,7 @@ class Interpreter:
                         self.display.set_graphics_pen(pen)
                     if getattr(stmt, 'mode', None) is not None:
                         mode = int(self.evaluate(stmt.mode))
-                        self.display.set_bg_mode(mode)
+                        self.display.set_graphics_write_mode(mode)
                     self.display.draw(x, y, pen)
 
                 elif isinstance(stmt, DrawrStatement):
@@ -756,7 +773,7 @@ class Interpreter:
                         self.display.set_graphics_pen(pen)
                     if getattr(stmt, 'mode', None) is not None:
                         mode = int(self.evaluate(stmt.mode))
-                        self.display.set_bg_mode(mode)
+                        self.display.set_graphics_write_mode(mode)
                     # DRAWR logic: relative to current position
                     curr_x = getattr(self.display, 'graphics_x', 0)
                     curr_y = getattr(self.display, 'graphics_y', 0)
@@ -770,7 +787,7 @@ class Interpreter:
                         self.display.set_graphics_pen(pen)
                     if stmt.mode is not None:
                         mode = int(self.evaluate(stmt.mode))
-                        self.display.set_bg_mode(mode)
+                        self.display.set_graphics_write_mode(mode)
                     self.display.move(x, y)
 
                 elif isinstance(stmt, MoverStatement):
@@ -781,7 +798,7 @@ class Interpreter:
                         self.display.set_graphics_pen(pen)
                     if getattr(stmt, 'mode', None) is not None:
                         mode = int(self.evaluate(stmt.mode))
-                        self.display.set_bg_mode(mode)
+                        self.display.set_graphics_write_mode(mode)
                     curr_x = getattr(self.display, 'graphics_x', 0)
                     curr_y = getattr(self.display, 'graphics_y', 0)
                     self.display.move(curr_x + x, curr_y + y)
@@ -1097,21 +1114,39 @@ class Interpreter:
                         print(f"[INPUT] user entered: {val}")
                         
                     if stmt.variables:
-                        var = stmt.variables[0]
-                        if not var.endswith('$'):
-                            val_str = val.strip().upper()
-                            try:
-                                if val_str.startswith('&X'):
-                                    val = int(val_str[2:], 2)
-                                elif val_str.startswith('&H'):
-                                    val = int(val_str[2:], 16)
-                                elif val_str.startswith('&'):
-                                    val = int(val_str[1:], 16)
-                                else:
-                                    val = float(val) if '.' in val else int(val)
-                            except ValueError:
-                                val = 0
-                        self.variables[var] = val
+                        input_parts = val.split(',')
+                        for i, var in enumerate(stmt.variables):
+                            if i < len(input_parts):
+                                part_val = input_parts[i].strip()
+                            else:
+                                part_val = ""
+                            parsed_val = part_val
+                            
+                            is_array = isinstance(var, tuple)
+                            var_name = var[0] if is_array else var
+                            
+                            if not var_name.endswith('$'):
+                                val_str = part_val.upper()
+                                try:
+                                    if val_str.startswith('&X'):
+                                        parsed_val = int(val_str[2:], 2)
+                                    elif val_str.startswith('&H'):
+                                        parsed_val = int(val_str[2:], 16)
+                                    elif val_str.startswith('&'):
+                                        parsed_val = int(val_str[1:], 16)
+                                    else:
+                                        parsed_val = float(val_str) if '.' in val_str else int(val_str)
+                                except ValueError:
+                                    parsed_val = 0
+                                    
+                            if is_array:
+                                var_name, dims = var
+                                dims_eval = tuple(int(self.evaluate(d)) for d in dims)
+                                if var_name not in self.arrays:
+                                    self.arrays[var_name] = {}
+                                self.arrays[var_name][dims_eval] = parsed_val
+                            else:
+                                self.variables[var_name] = parsed_val
 
                 elif isinstance(stmt, FrameStatement):
                     if 'pygame' in sys.modules:

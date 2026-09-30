@@ -1,0 +1,34 @@
+10 REM PARABOLA
+20 REM dibuja una parabola
+25 DIM c(3)
+30 CLS:MODE 2
+40 INK 0,13:InK 1,0
+50 INPUT"valores máximos de x,y";mx,my
+60 INPUT "c1, c2, c3" ;c(1),c(2),c(3)
+70 xc=320
+80 x=-c(2)/(2*c(1))
+90 yv=c(1)*x^2+c(2)*x+c(3)
+100 IF c(1)<0 THEN ya=0
+110 IF c(1)>0 THEN ya=my
+120 xl1=320:xl2=320:xr1=320:xr2=320
+130 x=x-1
+140 n=3
+150 y=c(1)
+160 FOR i=2 TO n
+170 y=y*x+c(i)
+175 NEXT i
+180 IF c(1)<0 THEN yb=yv-y
+190 IF c(1)>0 THEN yb=my-(y-yv)
+200 xl2=xl2-1
+210 xr2=xr2+1
+220 MOVE xl1,ya
+230 DRAW xl2,yb
+240 MOVE xr1,ya
+250 DRAW xr2,yb
+260 ya=yb
+270 xl1=xl2
+280 xr1=xr2
+285 IF ya=1 THEN 300
+290 GOTO 130
+300 c(1)=c(1)+0.005:c(2)=c(2)+0.005:c(3)=c(3)+0.005
+310 GOTO 80

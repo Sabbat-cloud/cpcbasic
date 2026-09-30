@@ -65,6 +65,7 @@ class Display:
         self.graphics_pen = 1
         self.graphics_paper = 0
         self.bg_mode = 0
+        self.graphics_write_mode = 0
         
         self.speed_ink_1 = 10 * 20  # 200ms
         self.speed_ink_2 = 10 * 20  # 200ms
@@ -159,6 +160,10 @@ class Display:
         if 0 <= paper < 16:
             self.graphics_paper = paper
             
+    def set_graphics_write_mode(self, mode):
+        if mode in (0, 1, 2, 3):
+            self.graphics_write_mode = mode
+
     def set_bg_mode(self, mode):
         if mode in (0, 1):
             self.bg_mode = mode
@@ -553,7 +558,7 @@ class Display:
         elif self.mode == 1: width = 2
         else: width = 1
         
-        if self.line_mask == 255 and self.mask_first == 1:
+        if self.line_mask == 255 and self.mask_first == 1 and self.graphics_write_mode == 0:
             pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
         else:
             dx = abs(end_x - start_x)
@@ -575,9 +580,16 @@ class Display:
                     draw_dot = (self.line_mask & (1 << bit_idx)) != 0
                     bit_idx = (bit_idx - 1) % 8
                     
+                
                 if draw_dot:
                     rect = pygame.Rect(cx, cy, width, 2)
-                    pygame.draw.rect(self.logical_surface, pen, rect)
+                    if self.graphics_write_mode == 1:
+                        if 0 <= cx < self.logical_width and 0 <= cy < self.logical_height:
+                            curr_pen = self.logical_surface.get_at_mapped((cx, cy))
+                            new_pen = curr_pen ^ pen
+                            pygame.draw.rect(self.logical_surface, new_pen, rect)
+                    else:
+                        pygame.draw.rect(self.logical_surface, pen, rect)
                 elif self.bg_mode == 0:
                     rect = pygame.Rect(cx, cy, width, 2)
                     pygame.draw.rect(self.logical_surface, self.graphics_paper, rect)
