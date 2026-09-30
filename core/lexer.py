@@ -21,7 +21,7 @@ KEYWORDS = {
     'RANDOMIZE', 'DEG', 'RAD', 'FILL', 'ERASE', 'EVERY', 'AFTER',
     'POKE', 'PEEK', 'JOY', 'DEF', 'DI', 'EI', 'GRAPHICS', 'USING',
     'ERROR', 'ERR', 'ERL', 'RESUME', 'SQ', 'PAUSE',
-    'OPENIN', 'OPENOUT', 'CLOSEIN', 'CLOSEOUT', 'EOF', 'WRITE'
+    'OPENIN', 'OPENOUT', 'CLOSEIN', 'CLOSEOUT', 'EOF', 'WRITE', 'RELEASE'
 }
 
 token_specification = [

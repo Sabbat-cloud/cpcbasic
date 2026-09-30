@@ -104,12 +104,16 @@ class SoundEngine:
                         else:
                             current_vol += step_size
                             
-                        # El hardware del CPC hace loop en volumen 0-15
-                        current_vol = current_vol % 16
+                        # El firmware del CPC recorta el volumen entre 0 y 15 (no hace wrap)
+                        current_vol = max(0, min(15, current_vol))
                         
                         end_t = min(t_idx + ticks_per_step, total_ticks)
                         tick_vols[t_idx:end_t] = current_vol
                         t_idx = end_t
+
+            # Mantener el último volumen de la envolvente por el resto del sonido
+            if t_idx < total_ticks:
+                tick_vols[t_idx:] = current_vol
 
         # Aplicar ENT (Tono)
         if ent > 0 and ent in self.envelopes_tone:
@@ -138,6 +142,10 @@ class SoundEngine:
                     end_t = min(t_idx + ticks_per_step, total_ticks)
                     tick_periods[t_idx:end_t] = current_period
                     t_idx = end_t
+            
+            # Mantener el último periodo de la envolvente por el resto del sonido
+            if t_idx < total_ticks:
+                tick_periods[t_idx:] = current_period
 
         # 3. Expandir Ticks a Samples de Audio
         num_samples = total_ticks * self.samples_per_tick
