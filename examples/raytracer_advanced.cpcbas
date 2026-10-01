@@ -1,55 +1,65 @@
-1 BORDER 0:MODE 0
-2 st=TIME/300
-3 INK 0,0:INK 1,6:INK 2,2:INK 3,18:INK 4,24:INK 5,3:INK 6,1:INK 7,9:INK 8,12
-4 ns%=4:DIM sx(ns%),sy(ns%),sz(ns%),sr(ns%),sc%(ns%),rs(ns%)
-5 RESTORE 9000:FOR i%=1 TO ns%:READ sx(i%),sy(i%),sz(i%),sr(i%),sc%(i%):rs(i%)=SQR(sr(i%)):NEXT
-6 lx=5:ly=5:lz=-5
+1 BORDER 0:MODE 0 ' Inicia modo grafico de 16 colores
+2 st=TIME/300 ' Guarda el tiempo de inicio
+3 ' Paleta: 0=Fondo, 1-4=Colores base (Luz), 5-8=Colores oscuros (Sombra/Reflejo)
+4 INK 0,0:INK 1,6:INK 2,2:INK 3,18:INK 4,24:INK 5,3:INK 6,1:INK 7,9:INK 8,12
+5 ns%=4:DIM sx(ns%),sy(ns%),sz(ns%),sr(ns%),sc%(ns%),rs(ns%)
+6 RESTORE 9000:FOR i%=1 TO ns%:READ sx(i%),sy(i%),sz(i%),sr(i%),sc%(i%):rs(i%)=SQR(sr(i%)):NEXT
+7 lx=5:ly=5:lz=-5 ' Posicion de la fuente de luz
+8 ' Bucle principal que recorre la pantalla
 10 FOR x%=0 TO 639 STEP 4
 20 FOR y%=0 TO 399 STEP 2
-30 ox=0:oy=0:oz=0
-40 dx=(x%-320)/580:dy=(y%-200)/580:dz=1
-50 dl=SQR(dx*dx+dy*dy+1):dx=dx/dl:dy=dy/dl:dz=dz/dl
-60 GOSUB 1000
-70 IF hit%=0 THEN col%=0:GOTO 300
-80 hit1%=hit%:mt1=mt
-90 px=ox+mt1*dx:py=oy+mt1*dy:pz=oz+mt1*dz
-100 nx=(px-sx(hit1%))/rs(hit1%):ny=(py-sy(hit1%))/rs(hit1%):nz=(pz-sz(hit1%))/rs(hit1%)
+30 ox=0:oy=0:oz=0 ' Origen del rayo de la camara
+40 dx=(x%-320)/580:dy=(y%-200)/580:dz=1 ' Direccion del rayo
+50 dl=SQR(dx*dx+dy*dy+1):dx=dx/dl:dy=dy/dl:dz=dz/dl ' Normalizamos vector director (crucial para la optimizacion matematica)
+60 GOSUB 1000 ' Lanza el rayo a la escena
+70 IF hit%=0 THEN col%=0:GOTO 310 ' Si no choca con nada, dibuja fondo negro
+80 hit1%=hit%:mt1=mt ' Guarda datos del choque principal
+90 px=ox+mt1*dx:py=oy+mt1*dy:pz=oz+mt1*dz ' Calcula punto 3D del impacto
+100 ' Calcula la Normal de la superficie en el punto de impacto
+110 nx=(px-sx(hit1%))/rs(hit1%):ny=(py-sy(hit1%))/rs(hit1%):nz=(pz-sz(hit1%))/rs(hit1%)
+120 ' Calcula vector hacia la luz y su distancia
 130 ldx=lx-px:ldy=ly-py:ldz=lz-pz
 140 llen=SQR(ldx*ldx+ldy*ldy+ldz*ldz)
-150 ndotl=(nx*ldx+ny*ldy+nz*ldz)/llen
-160 IF ndotl<0 THEN ndotl=0
-170 ox=px+nx*0.02:oy=py+ny*0.02:oz=pz+nz*0.02
-180 sdx=dx:sdy=dy:sdz=dz
-190 dx=ldx/llen:dy=ldy/llen:dz=ldz/llen
-200 GOSUB 1000
-210 in_shadow=0:IF hit%>0 AND mt<llen THEN in_shadow=1
-220 IF in_shadow=1 THEN ndotl=0
-230 IF ndotl<0.2 THEN col%=hit1%+4 ELSE col%=hit1%
-240 ndotd=sdx*nx+sdy*ny+sdz*nz
-250 dx=sdx-2*ndotd*nx:dy=sdy-2*ndotd*ny:dz=sdz-2*ndotd*nz
-260 GOSUB 1000
-270 IF (x%\4+y%\2) MOD 2=0 THEN IF hit%>0 THEN col%=hit%+4 ELSE col%=0
-300 PLOT x%,y%,col%
+150 ndotl=(nx*ldx+ny*ldy+nz*ldz)/llen ' Producto punto (Luz difusa lambertiana)
+160 IF ndotl<0 THEN ndotl=0 ' Si la luz esta detras, no hay iluminacion
+170 ' Prepara el Rayo de Sombra (lo adelanta un poco en direccion de la normal para no chocar consigo mismo)
+180 ox=px+nx*0.02:oy=py+ny*0.02:oz=pz+nz*0.02
+190 sdx=dx:sdy=dy:sdz=dz ' Guarda el rayo de camara original
+200 dx=ldx/llen:dy=ldy/llen:dz=ldz/llen ' Vector del rayo de sombra
+210 GOSUB 1000 ' Lanza el rayo de sombra
+220 in_shadow=0:IF hit%>0 AND mt<llen THEN in_shadow=1 ' Si choca con algo antes de llegar a la luz, hay sombra
+230 IF in_shadow=1 THEN ndotl=0
+240 IF ndotl<0.2 THEN col%=hit1%+4 ELSE col%=hit1% ' Selecciona color base o color oscuro en base a la luz
+250 ' Prepara el Rayo de Reflejo usando la formula R = D - 2*(D*N)*N
+260 ndotd=sdx*nx+sdy*ny+sdz*nz
+270 dx=sdx-2*ndotd*nx:dy=sdy-2*ndotd*ny:dz=sdz-2*ndotd*nz
+280 GOSUB 1000 ' Lanza el rayo reflejado
+290 ' Efecto de Dithering: si las coordenadas forman un pixel "par", pintamos el objeto reflejado
+300 IF (x%\4+y%\2) MOD 2=0 THEN IF hit%>0 THEN col%=hit%+4 ELSE col%=0
+310 PLOT x%,y%,col% ' Dibuja el pixel
 500 NEXT
-505 et=(TIME/300)-st:LOCATE 1,1:PEN 5:PRINT USING "#####,.##s";et
+505 et=(TIME/300)-st:LOCATE 1,1:PEN 5:PRINT USING "#####,.##s";et ' Muestra el tiempo al terminar la linea
 510 NEXT
-515 WHILE 1:WEND
+515 WHILE 1:WEND ' Bucle infinito para dejar la imagen en pantalla
 520 STOP
-1000 mt=1E+10:hit%=0
+1000 ' --- RUTINA DE INTERSECCION OPTIMIZADA ---
+1010 mt=1E+10:hit%=0
 1020 FOR s%=1 TO ns%
 1030 vx=ox-sx(s%):vy=oy-sy(s%):vz=oz-sz(s%)
 1040 bh=dx*vx+dy*vy+dz*vz
 1050 cq=vx*vx+vy*vy+vz*vz-sr(s%)
-1060 dq=bh*bh-cq
-1070 IF dq<0 THEN 1130
+1060 dq=bh*bh-cq ' Al estar el vector direccion del rayo siempre normalizado a longitud 1, "a" vale 1 y simplifica esta formula inmensamente
+1070 IF dq<0 THEN 1130 ' Si es negativo, el rayo pasa de largo
 1080 dq=SQR(dq)
-1090 t=-bh-dq
+1090 t=-bh-dq ' Primera raiz de la ecuacion
 1100 IF t>0.01 AND t<mt THEN mt=t:hit%=s%
-1110 t=-bh+dq
+1110 t=-bh+dq ' Segunda raiz de la ecuacion
 1120 IF t>0.01 AND t<mt THEN mt=t:hit%=s%
 1130 NEXT
 1140 RETURN
-9000 DATA 0,-1,4,1,1
-9001 DATA 2,0,4,1,2
-9002 DATA -2,0,4,1,3
-9003 DATA 0,-5001,0,25000000,4
+9000 ' --- DATOS DE LAS ESFERAS ---
+9010 ' Formato: X, Y, Z, Radio al cuadrado, Color (1=Rojo, 2=Azul, 3=Verde, 4=Suelo Amarillo)
+9020 DATA 0,-1,4,1,1
+9030 DATA 2,0,4,1,2
+9040 DATA -2,0,4,1,3
+9050 DATA 0,-5001,0,25000000,4

@@ -2,6 +2,7 @@ import math
 import random
 import sys
 import pygame
+import ast
 from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, GotoStatement, 
                          ModeStatement, ForStatement, NextStatement, Literal, Variable,
                          PlotStatement, DrawStatement, DrawrStatement, MoveStatement, MoverStatement, InkStatement,
@@ -311,7 +312,42 @@ class Interpreter:
                     s += ')' * (open_parens - close_parens)
                     
                 try:
-                    code_obj = compile(s, '<basic_expr>', 'eval')
+                    class BitwiseTransformer(ast.NodeTransformer):
+                        def visit_BoolOp(self, node):
+                            self.generic_visit(node)
+                            if isinstance(node.op, ast.And):
+                                res = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.values[0]], keywords=[])
+                                for val in node.values[1:]:
+                                    v_int = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[val], keywords=[])
+                                    res = ast.BinOp(left=res, op=ast.BitAnd(), right=v_int)
+                                return ast.copy_location(res, node)
+                            elif isinstance(node.op, ast.Or):
+                                res = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.values[0]], keywords=[])
+                                for val in node.values[1:]:
+                                    v_int = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[val], keywords=[])
+                                    res = ast.BinOp(left=res, op=ast.BitOr(), right=v_int)
+                                return ast.copy_location(res, node)
+                            return node
+                        def visit_UnaryOp(self, node):
+                            self.generic_visit(node)
+                            if isinstance(node.op, ast.Not):
+                                v_int = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.operand], keywords=[])
+                                return ast.copy_location(ast.UnaryOp(op=ast.Invert(), operand=v_int), node)
+                            return node
+                        def visit_Compare(self, node):
+                            self.generic_visit(node)
+                            return ast.copy_location(ast.UnaryOp(op=ast.USub(), operand=node), node)
+                        def visit_BinOp(self, node):
+                            self.generic_visit(node)
+                            if isinstance(node.op, ast.BitXor):
+                                node.left = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.left], keywords=[])
+                                node.right = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.right], keywords=[])
+                            return node
+                            
+                    tree = ast.parse(s, mode='eval')
+                    tree = BitwiseTransformer().visit(tree)
+                    ast.fix_missing_locations(tree)
+                    code_obj = compile(tree, '<basic_expr>', 'eval')
                     expr._cached_code = code_obj
                 except Exception as e:
                     print(f"Error compiling '{s}': {e}")
@@ -336,6 +372,22 @@ class Interpreter:
                     eval_globals[f"USER_FN_{fn_name}"] = fn_func
                     
                 return eval(code_obj, eval_globals, {})
+            except ZeroDivisionError:
+                self.pending_error_jump = self.trigger_error(11, self.pc)
+                return 0
+            except OverflowError:
+                self.pending_error_jump = self.trigger_error(6, self.pc)
+                return 0
+            except TypeError as e:
+                import traceback
+                traceback.print_exc()
+                print("TYPE ERROR DETECTED:", e)
+                if hasattr(expr, '_cached_code'):
+                    import dis
+                    print("DISASSEMBLY OF CACHED CODE:")
+                    dis.dis(expr._cached_code)
+                self.pending_error_jump = self.trigger_error(13, self.pc)
+                return 0
             except Exception as e:
                 # We can't print 's' here easily if code_obj was used, but we can just say error.
                 print(f"Error evaluating expression: {e}")
@@ -428,6 +480,10 @@ class Interpreter:
             stmt_idx = getattr(self, 'next_stmt_idx', 0)
             self.next_stmt_idx = 0
             while stmt_idx < len(statements):
+                if hasattr(self, 'pending_error_jump'):
+                    next_pc = self.pending_error_jump
+                    delattr(self, 'pending_error_jump')
+                    break
                 stmt = statements[stmt_idx]
                 stmt_idx += 1
                 if isinstance(stmt, PrintStatement):
