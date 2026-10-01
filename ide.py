@@ -98,6 +98,10 @@ class CPCIDE:
         run_menu = tk.Menu(menubar, tearoff=0)
         run_menu.add_command(label="Ejecutar (F5)", command=self.run_code)
         run_menu.add_command(label="Detener (F6)", command=self.stop_code)
+        run_menu.add_separator()
+        self.speed_var = tk.StringVar(value='unlimited')
+        run_menu.add_radiobutton(label="Velocidad: Ilimitada", variable=self.speed_var, value='unlimited')
+        run_menu.add_radiobutton(label="Velocidad: Real (CPC 6128)", variable=self.speed_var, value='real')
         menubar.add_cascade(label="Ejecutar", menu=run_menu)
 
         tools_menu = tk.Menu(menubar, tearoff=0)
@@ -308,7 +312,8 @@ Uso de TAG / TAGOFF:
         
         try:
             # We don't pass SDL_WINDOWID anymore so Pygame opens a new interactive window
-            self.process = subprocess.Popen([sys.executable, main_py, temp_file, "--scale", "2"], env=env)
+            speed_val = getattr(self, 'speed_var', tk.StringVar(value='unlimited')).get()
+            self.process = subprocess.Popen([sys.executable, main_py, temp_file, "--scale", "2", "--speed", speed_val], env=env)
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo ejecutar el emulador:{e}")
 

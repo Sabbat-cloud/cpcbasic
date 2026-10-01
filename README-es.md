@@ -22,6 +22,7 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 - **Interacción con Teclado y Joysticks**: Soporte para lectura asíncrona de teclado (`INKEY$`, `INKEY`), pausas de hardware (`CALL &BB18`, `PAUSE 0`) y joysticks simulados mediante Pygame (`JOY`).
 - **Memoria Virtual (PEEK/POKE)**: Implementa una matriz de RAM virtual de 64KB y llamadas a memoria simuladas (`CALL`), lo que permite que scripts antiguos se ejecuten sin lanzar errores por falta de memoria.
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
+- **Ejecución Optimizada y Control de Velocidad**: Generación y caché de código AST en segundo plano, consiguiendo velocidades ultrarrápidas en modo de ejecución sin límites. Adicionalmente ofrece un límite opcional que reproduce la velocidad exacta de ejecución del procesador original del Amstrad CPC 6128.
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios de código máquina Z80 compilados, dado que es un intérprete de lenguaje de alto nivel, no un emulador de CPU).*
 
@@ -43,10 +44,10 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 ## Uso
 
-Puedes ejecutar el emulador pasándole un script BASIC como argumento. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`.
+Puedes ejecutar el emulador pasándole un script BASIC como argumento. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`. También puedes controlar la velocidad de ejecución con el parámetro `--speed` (utiliza `real` para simular el hardware original o `unlimited` para máxima velocidad).
 
 ```bash
-python main.py examples/matrix.cpcbas --scale 3
+python main.py examples/matrix.cpcbas --scale 3 --speed real
 ```
 
 También puedes ejecutar imágenes `.dsk` directamente:

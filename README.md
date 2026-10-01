@@ -22,6 +22,7 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 - **Keyboard & Joystick Interaction**: Support for asynchronous keyboard reading (`INKEY$`, `INKEY`), hardware pauses (`CALL &BB18`, `PAUSE 0`), and simulated joysticks using Pygame (`JOY`).
 - **Virtual Memory (PEEK/POKE)**: Implements a 64KB virtual RAM array and simulated memory calls (`CALL`), allowing legacy scripts to execute without crashing due to missing memory routines.
 - **Disk (.dsk) Read Support**: On-the-fly mounting of `.dsk` files. Seamlessly extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats.
+- **Optimized Execution & Speed Control**: Features cached AST code generation for incredibly fast unlimited execution, while offering an optional speed throttle to replicate the original Amstrad CPC 6128 CPU speed.
 
 *(Note: It does not support tokenized binary BASIC files or compiled Z80 machine code binaries, since it is a high-level language interpreter, not a CPU emulator).*
 
@@ -42,10 +43,10 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 
 ## Usage
 
-You can run the emulator by passing a BASIC script as an argument. The window is scaled x2 by default, but you can change it with `--scale`.
+You can run the emulator by passing a BASIC script as an argument. The window is scaled x2 by default, but you can change it with `--scale`. You can also control the execution speed with the `--speed` parameter (use `real` for original hardware speed or `unlimited` for maximum speed).
 
 ```bash
-python main.py examples/matrix.cpcbas --scale 3
+python main.py examples/matrix.cpcbas --scale 3 --speed real
 ```
 
 You can also run `.dsk` images directly:

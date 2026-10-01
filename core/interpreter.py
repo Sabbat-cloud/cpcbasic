@@ -25,8 +25,9 @@ def cpc_asc(x): return ord(x[0]) if x else 0
 def cpc_rnd(x=None): return random.random()
 
 class Interpreter:
-    def __init__(self, program, scale=2):
+    def __init__(self, program, scale=2, speed='unlimited'):
         self.program = program
+        self.speed = speed
         self.variables = {}
         self.arrays = {}
         self.pc = None
@@ -234,83 +235,88 @@ class Interpreter:
             elif expr.type == 'BIN_NUMBER':
                 return int(expr.value[2:], 2)
         elif isinstance(expr, RawExpression):
-            s = ""
-            skip_next = False
-            for i, t in enumerate(expr.tokens):
-                if skip_next:
-                    skip_next = False
-                    continue
-                if t.type == 'IDENTIFIER':
-                    val_upper = t.value.upper()
-                    if val_upper == 'FN' and i + 1 < len(expr.tokens) and expr.tokens[i+1].type == 'IDENTIFIER':
-                        val_upper = "FN" + expr.tokens[i+1].value.upper()
-                        skip_next = True
-                    
-                    if val_upper == 'INKEY$':
-                        inkey_val = self.display.get_inkey_str()
-                        s += repr(inkey_val)
-                    elif val_upper in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'LOWER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
-                        s += val_upper.replace('$', '_STR')
-                    elif val_upper in self.builtins:
-                        kw = val_upper
-                        s += kw
-                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL"):
+            if hasattr(expr, '_cached_code'):
+                code_obj = expr._cached_code
+            else:
+                s = ""
+                skip_next = False
+                for i, t in enumerate(expr.tokens):
+                    if skip_next:
+                        skip_next = False
+                        continue
+                    if t.type == 'IDENTIFIER':
+                        val_upper = t.value.upper()
+                        if val_upper == 'FN' and i + 1 < len(expr.tokens) and expr.tokens[i+1].type == 'IDENTIFIER':
+                            val_upper = "FN" + expr.tokens[i+1].value.upper()
+                            skip_next = True
+                        
+                        if val_upper == 'INKEY$':
+                            s += "GET_INKEY_STR()"
+                        elif val_upper in ('CHR$', 'LEFT$', 'RIGHT$', 'MID$', 'STR$', 'SPACE$', 'COPYCHR$', 'UPPER$', 'LOWER$', 'STRING$', 'HEX$', 'BIN$', 'DEC$'):
+                            s += val_upper.replace('$', '_STR')
+                        elif val_upper in self.builtins:
+                            kw = val_upper
+                            s += kw
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL"):
+                                next_idx = i + 2 if skip_next else i + 1
+                                if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
+                                    s += "()"
+                        elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
+                            s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                        elif val_upper in self.user_functions:
+                            s += f"USER_FN_{val_upper}"
+                            # If called without parenthesis, add them
                             next_idx = i + 2 if skip_next else i + 1
                             if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                 s += "()"
-                    elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
-                        s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
-                    elif val_upper in self.user_functions:
-                        s += f"USER_FN_{val_upper}"
-                        # If called without parenthesis, add them
-                        next_idx = i + 2 if skip_next else i + 1
-                        if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
-                            s += "()"
-                    else:
-                        val = self.variables.get(t.value, self.get_default_value(t.value))
-                        if isinstance(val, str):
-                            s += repr(val)
                         else:
-                            s += str(val)
-                elif t.type == 'HEX_NUMBER':
-                    val = t.value[1:].upper()
-                    if val.startswith('H'): val = val[1:]
-                    s += "0x" + val
-                elif t.type == 'BIN_NUMBER':
-                    s += "0b" + t.value[2:]
-                elif t.type == 'SYMBOL' and t.value == '=':
-                    s += '=='
-                elif t.type == 'SYMBOL' and t.value == '<>':
-                    s += '!='
-                elif t.type == 'SYMBOL' and t.value == '^':
-                    s += '**'
-                elif t.type == 'SYMBOL' and t.value == '\\':
-                    s += '//'
-                elif t.type == 'SYMBOL' and t.value == '#':
-                    pass  # ignore stream symbol
-                elif t.type == 'KEYWORD':
-                    kw = t.value.upper()
-                    if kw == 'MOD': s += ' % '
-                    elif kw == 'AND': s += ' and '
-                    elif kw == 'OR': s += ' or '
-                    elif kw == 'NOT': s += ' not '
-                    elif kw == 'XOR': s += ' ^ '
-                    elif kw in self.builtins:
-                        s += kw
-                        if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF"):
-                            if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
-                                s += "()"
-                    else: s += f' {kw} '
-                elif t.type == 'STRING':
-                    s += repr(t.value)
-                else:
-                    s += str(t.value)
+                            s += f"GET_VAR({repr(t.value)})"
+                    elif t.type == 'HEX_NUMBER':
+                        val = t.value[1:].upper()
+                        if val.startswith('H'): val = val[1:]
+                        s += "0x" + val
+                    elif t.type == 'BIN_NUMBER':
+                        s += "0b" + t.value[2:]
+                    elif t.type == 'SYMBOL' and t.value == '=':
+                        s += '=='
+                    elif t.type == 'SYMBOL' and t.value == '<>':
+                        s += '!='
+                    elif t.type == 'SYMBOL' and t.value == '^':
+                        s += '**'
+                    elif t.type == 'SYMBOL' and t.value == '\\':
+                        s += '//'
+                    elif t.type == 'SYMBOL' and t.value == '#':
+                        pass  # ignore stream symbol
+                    elif t.type == 'KEYWORD':
+                        kw = t.value.upper()
+                        if kw == 'MOD': s += ' % '
+                        elif kw == 'AND': s += ' and '
+                        elif kw == 'OR': s += ' or '
+                        elif kw == 'NOT': s += ' not '
+                        elif kw == 'XOR': s += ' ^ '
+                        elif kw in self.builtins:
+                            s += kw
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF"):
+                                if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
+                                    s += "()"
+                        else: s += f' {kw} '
+                    elif t.type == 'STRING':
+                        s += repr(t.value)
+                    else:
+                        s += str(t.value)
+                        
+                open_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == '(')
+                close_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == ')')
+                if open_parens > close_parens:
+                    s += ')' * (open_parens - close_parens)
                     
-            open_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == '(')
-            close_parens = sum(1 for t in expr.tokens if t.type == 'SYMBOL' and t.value == ')')
-            if open_parens > close_parens:
-                s += ')' * (open_parens - close_parens)
-                
+                try:
+                    code_obj = compile(s, '<basic_expr>', 'eval')
+                    expr._cached_code = code_obj
+                except Exception as e:
+                    print(f"Error compiling '{s}': {e}")
+                    return 0
+
             try:
                 class ArrayWrapper:
                     def __init__(self, arr_dict, is_string):
@@ -320,15 +326,19 @@ class Interpreter:
                         return self.arr_dict.get(tuple(int(a) for a in args), "" if self.is_string else 0)
                 
                 eval_globals = self.builtins.copy()
+                eval_globals['GET_VAR'] = lambda name: self.variables.get(name, self.get_default_value(name))
+                eval_globals['GET_INKEY_STR'] = lambda: self.display.get_inkey_str()
+                
                 for arr_name, arr_dict in self.arrays.items():
                     safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     eval_globals[safe_name] = ArrayWrapper(arr_dict, arr_name.endswith('$'))
                 for fn_name, fn_func in self.user_functions.items():
                     eval_globals[f"USER_FN_{fn_name}"] = fn_func
                     
-                return eval(s, eval_globals, {})
+                return eval(code_obj, eval_globals, {})
             except Exception as e:
-                print(f"Error evaluando '{s}': {e}")
+                # We can't print 's' here easily if code_obj was used, but we can just say error.
+                print(f"Error evaluating expression: {e}")
                 return 0
 
         return 0
@@ -348,15 +358,39 @@ class Interpreter:
         self.pc = self.line_numbers[0]
         self.running = True
         
+        self.stmts_this_frame = 0
+        self.stmts_since_event = 0
+        self.last_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+        statements_limit = 42 # Approx. real CPC BASIC statements per 20ms frame (gives ~4.7s for 5000 empty FOR loops)
+        
         while self.running and self.pc is not None:
-            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
-            if hasattr(self, 'display'):
-                self.display.process_events()
-                if current_time - getattr(self, 'last_update', 0) >= 20:
-                    self.display.update()
-                    self.last_update = current_time
+            is_real_speed = getattr(self, 'speed', 'unlimited') == 'real'
+            self.stmts_since_event += 1
+            
+            if is_real_speed:
+                self.stmts_this_frame += 1
+                if self.stmts_this_frame > statements_limit:
+                    current_t = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                    wait_time = 20 - (current_t - getattr(self, 'last_update', 0))
+                    if wait_time > 0 and 'pygame' in sys.modules:
+                        pygame.time.wait(wait_time)
+                    self.stmts_this_frame = 0
+                    self.stmts_since_event = 100 # force event check
+
+            if self.stmts_since_event >= 100:
+                current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                self.last_time = current_time
+                if hasattr(self, 'display'):
+                    self.display.process_events()
+                    if current_time - getattr(self, 'last_update', 0) >= 20:
+                        self.display.update()
+                        self.last_update = current_time
+                        self.stmts_this_frame = 0
+                self.stmts_since_event = 0
+            else:
+                current_time = self.last_time
+
             # -- Timer Interrupt Check (AFTER / EVERY / SQ) --
-            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
             interrupt_triggered = False
             if self.interrupts_enabled:
                 if hasattr(self, 'sq_timers'):
@@ -1217,14 +1251,14 @@ class Interpreter:
                             next_pc = jump_pc
                             self.next_stmt_idx = jump_idx
                             break
-            
-            self.display.update()
-            self.display.process_events()
-            
             self.pc = next_pc
-        
-        # Keep window open
-        while True:
-            self.display.process_events()
-            self.display.update()
+            
+        # Keep window open when execution finishes
+        if hasattr(self, 'display'):
+            while True:
+                self.display.process_events()
+                self.display.update()
+                if 'pygame' in sys.modules:
+                    pygame.time.wait(20)
+
 

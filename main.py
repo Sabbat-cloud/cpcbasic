@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Amstrad CPC BASIC Emulator")
     parser.add_argument("filename", nargs="?", help="Archivo .cpcbas a ejecutar")
     parser.add_argument("--scale", type=int, default=2, help="Escalado de la ventana (ej. 2, 3)")
+    parser.add_argument("--speed", type=str, choices=['real', 'unlimited'], default='unlimited', help="Velocidad: 'real' o 'unlimited'")
     parser.add_argument("--list", action="store_true", help="Solo muestra el listado del código y sale, sin ejecutarlo")
     args = parser.parse_args()
 
@@ -85,6 +86,6 @@ if __name__ == '__main__':
     program = parser.parse()
     
     print("\n--- Execution ---")
-    interpreter = Interpreter(program, scale=args.scale)
+    interpreter = Interpreter(program, scale=args.scale, speed=args.speed)
     
     interpreter.execute()
