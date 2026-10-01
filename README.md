@@ -20,11 +20,11 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 - **Original Pixel Font**: Integrates the original CPC464 pixel font for a 1:1 text rendering experience (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Procedural Audio (AY-3-8912)**: Accurately parses the `SOUND` command and generates procedural square waves and white noise in real-time via `numpy` and Pygame's mixer.
 - **Keyboard & Joystick Interaction**: Support for asynchronous keyboard reading (`INKEY$`, `INKEY`), hardware pauses (`CALL &BB18`, `PAUSE 0`), and simulated joysticks using Pygame (`JOY`).
-- **Virtual Memory (PEEK/POKE)**: Implements a 64KB virtual RAM array and simulated memory calls (`CALL`), allowing legacy scripts to execute without crashing due to missing memory routines.
+- **Hybrid Emulation Architecture (Memory & Z80)**: Implements a 64KB virtual RAM array with bidirectional video-memory synchronization. `PEEK` and `POKE` commands operating on the CRTC memory area (`&C000` to `&FFFF`) will dynamically read and write pixels directly to the PyGame display, perfectly mimicking the Amstrad hardware layout. Furthermore, a "Ghost Z80" register system (`_REG_A`, `_REG_HL`, etc.) is exposed to the user, allowing BASIC variables to directly alter the virtual CPU state before executing firmware `CALL` instructions.
 - **Disk (.dsk) Read Support**: On-the-fly mounting of `.dsk` files. Seamlessly extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats.
 - **Optimized Execution & Speed Control**: Features cached AST code generation for incredibly fast unlimited execution, while offering an optional speed throttle to replicate the original Amstrad CPC 6128 CPU speed.
 
-*(Note: It does not support tokenized binary BASIC files or compiled Z80 machine code binaries, since it is a high-level language interpreter, not a CPU emulator).*
+*(Note: It does not support tokenized binary BASIC files or raw compiled Z80 machine code binaries, as it is a high-level interpreter rather than a cycle-accurate CPU emulator. However, it does intercept standard Amstrad ROM firmware `CALL`s and emulates their behavior natively in Python using the virtual Z80 registers).*
 
 **⚠️ WARNING: This emulator is in an early stage of development. Many features might fail.**
 
@@ -74,7 +74,7 @@ The short answer is for fun. I grew up with Amstrad CPC BASIC and sometimes want
 You can edit program listings with whichever editor you prefer without relying on an emulator, mounting disk drives, etc.
 Random file access is currently supported, allowing us to read, write, and modify any file on our PC to process it with our BASIC programs.
 Of course, there is also the absence of memory limitations and the speed boost.
-Its most obvious limitation is the lack of direct calls to firmware or machine code. Although `CALL &BB18` and others that I will be adding will work, they are not real calls: they simulate the instruction.
+Its most obvious limitation is the lack of full machine code execution. However, thanks to the new Hybrid Architecture, standard firmware calls (like `CALL &BB5A`, `CALL &BB18`) are intercepted. You can manipulate the virtual Z80 CPU registers directly from BASIC using special variables (e.g. `_REG_A = 65`) before calling the firmware, and the Python engine will simulate the hardware response instantly, reading your registers and executing the routine!
 
 ## Credits & Thanks
 - Font: [damianvila/font-cpc464](https://github.com/damianvila/font-cpc464)

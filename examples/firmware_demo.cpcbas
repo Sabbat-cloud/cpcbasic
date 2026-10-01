@@ -1,0 +1,15 @@
+10 ' Test the new firmware CALL hooks!
+20 PRINT "Llamando a SCR SET MODE (BC0E) para MODE 0"
+30 _REG_A = 0 : CALL &BC0E
+40 PRINT "Llamando a SCR SET INK (BC32)"
+50 _REG_A = 1 : _REG_B = 24 : _REG_C = 24 : CALL &BC32
+60 PRINT "Llamando a TXT SET CURSOR (BB75) para movernos a col 5, row 10"
+70 _REG_H = 5 : _REG_L = 10 : CALL &BB75
+80 PRINT "Texto escrito desde la nueva posicion usando PRINT"
+90 PRINT "Llamando a GRA MOVE ABSOLUTE (BBC0) a 0, 200"
+100 _REG_D = 0 : _REG_E = 0 : _REG_H = 0 : _REG_L = 200 : CALL &BBC0
+110 PRINT "Llamando a GRA LINE ABSOLUTE (BBF6) a 639, 200"
+120 ' 639 in 16-bit is D=2, E=127 (since 2*256 + 127 = 639)
+130 _REG_D = 2 : _REG_E = 127 : _REG_H = 0 : _REG_L = 200 : CALL &BBF6
+140 PRINT "Pulsa una tecla para terminar (CALL BB18)"
+150 CALL &BB18

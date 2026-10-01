@@ -1,0 +1,17 @@
+10 MODE 1
+20 PRINT "Llamando a &BB5A (TXT OUTPUT) via Z80 Fantasma:"
+30 FOR i=65 TO 90
+40 _REG_A = i
+50 CALL &BB5A
+60 NEXT i
+70 PRINT:PRINT
+80 PRINT "Haciendo POKEs directamente a la memoria de video (&C000):"
+90 FOR offset=0 TO 79
+100 POKE &C000 + offset, 255
+110 NEXT offset
+120 FOR offset=0 TO 79
+130 POKE &C800 + offset, 255
+140 NEXT offset
+150 PRINT "Y ahora leemos de vuelta con PEEK(&C000): "; PEEK(&C000)
+160 PRINT "Pulsa una tecla para salir..."
+170 CALL &BB18

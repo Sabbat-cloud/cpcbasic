@@ -25,6 +25,8 @@ def cpc_chr(x): return chr(int(x))
 def cpc_asc(x): return ord(x[0]) if x else 0
 def cpc_rnd(x=None): return random.random()
 
+from core.machine import Z80Registers
+
 class Interpreter:
     def __init__(self, program, scale=2, speed='unlimited'):
         self.program = program
@@ -35,6 +37,31 @@ class Interpreter:
         self.running = False
         self.display = Display(scale=scale)
         self.sound = SoundEngine()
+        
+        # Z80 Ghost Registers
+        self.z80 = Z80Registers()
+        
+        self.firmware_hooks = {
+            0xBB5A: self.fw_txt_output,
+            0xBB18: self.fw_km_wait_char,
+            0xBB06: self.fw_km_wait_char,
+            0xBB75: self.fw_txt_set_cursor,
+            0xBB78: self.fw_txt_get_cursor,
+            0xBB90: self.fw_txt_set_pen,
+            0xBB96: self.fw_txt_set_paper,
+            0xBBC0: self.fw_gra_move_absolute,
+            0xBBF6: self.fw_gra_line_absolute,
+            0xBBDE: self.fw_gra_set_pen,
+            0xBC0E: self.fw_scr_set_mode,
+            0xBC11: self.fw_scr_get_mode,
+            0xBC32: self.fw_scr_set_ink,
+            0xBC38: self.fw_scr_set_border,
+            0xBB24: self.fw_km_get_joystick,
+            0xBCAA: self.fw_sound_queue,
+            0xBCA7: self.fw_sound_check,
+            0xBD19: self.fw_mc_wait_flyback,
+            0xBC14: self.fw_scr_clear
+        }
         
         self.line_numbers = sorted(list(self.program.lines.keys()))
         self.for_loops = {}
@@ -108,7 +135,7 @@ class Interpreter:
             "HEX_STR": lambda x, w=None: hex(int(x))[2:].upper().zfill(w) if w else hex(int(x))[2:].upper(),
             "BIN_STR": lambda x, w=None: bin(int(x))[2:].zfill(w) if w else bin(int(x))[2:],
             "INSTR": lambda a, b, c=None: b.find(c, int(a)-1) + 1 if c is not None else a.find(b) + 1,
-            "PEEK": lambda addr: self.ram[int(addr) & 0xFFFF],
+            "PEEK": self.do_peek,
             "JOY": lambda joy_id: self.get_joy_state(int(joy_id)),
             "ATN": lambda x: math.degrees(math.atan(x)) if self.angle_mode == 'DEG' else math.atan(x),
             "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
@@ -151,6 +178,120 @@ class Interpreter:
             return 0
         except:
             return -1
+
+    def do_peek(self, addr):
+        addr = int(addr) & 0xFFFF
+        if addr >= 0xC000:
+            return self.display.peek_video_ram(addr)
+        return self.ram[addr]
+
+    def fw_km_wait_char(self):
+        while True:
+            self.display.process_events()
+            self.display.update()
+            if self.display.key_buffer:
+                char = self.display.key_buffer.pop(0)
+                self.z80.A = ord(char)
+                break
+            pygame.time.wait(10)
+
+    def fw_txt_output(self):
+        char = chr(self.z80.A)
+        self.display.print_text(char)
+
+    def fw_txt_set_cursor(self):
+        self.display.locate(self.z80.H, self.z80.L)
+        
+    def fw_txt_get_cursor(self):
+        self.z80.H = getattr(self.display, 'text_col', 1)  # Or stream handling... wait, text_col is in streams[0]
+        # Actually in display.py: self.streams[stream]['text_col']
+        self.z80.H = self.display.streams[0]['text_col'] if hasattr(self.display, 'streams') else 1
+        self.z80.L = self.display.streams[0]['text_row'] if hasattr(self.display, 'streams') else 1
+        
+    def fw_txt_set_pen(self):
+        self.display.set_pen(self.z80.A)
+        
+    def fw_txt_set_paper(self):
+        self.display.set_paper(self.z80.A)
+        
+    def _to_signed16(self, val):
+        return val - 65536 if val >= 32768 else val
+        
+    def fw_gra_move_absolute(self):
+        x = self._to_signed16(self.z80.DE)
+        y = self._to_signed16(self.z80.HL)
+        self.display.move(x, y)
+        
+    def fw_gra_line_absolute(self):
+        x = self._to_signed16(self.z80.DE)
+        y = self._to_signed16(self.z80.HL)
+        self.display.draw(x, y)
+        
+    def fw_gra_set_pen(self):
+        self.display.set_graphics_pen(self.z80.A)
+        
+    def fw_scr_set_mode(self):
+        self.display.set_mode(self.z80.A)
+        
+    def fw_scr_get_mode(self):
+        self.z80.A = self.display.mode
+        
+    def fw_scr_clear(self):
+        self.display.clear_graphics_window()
+        self.display.clear_graphics(0) # stream 0
+
+    def fw_scr_set_ink(self):
+        self.display.set_ink(self.z80.A, self.z80.B, self.z80.C)
+        
+    def fw_scr_set_border(self):
+        self.display.set_border(self.z80.B, self.z80.C)
+
+    def fw_km_get_joystick(self):
+        self.display.process_events()
+        joy0 = self.get_joy_state(0)
+        joy1 = self.get_joy_state(1)
+        self.z80.A = joy0
+        self.z80.H = joy0
+        self.z80.L = joy1
+        
+    def fw_sound_queue(self):
+        addr = self.z80.HL
+        if addr + 8 > 65535:
+            return
+            
+        status = self.ram[addr]
+        env = self.ram[addr+1]
+        ent = self.ram[addr+2]
+        period = self.ram[addr+3] | (self.ram[addr+4] << 8)
+        noise = self.ram[addr+5]
+        volume = self.ram[addr+6]
+        duration = self.ram[addr+7] | (self.ram[addr+8] << 8)
+        
+        # Convert duration to 16-bit signed
+        duration = self._to_signed16(duration)
+        
+        # We need to translate status into CPC BASIC SOUND command expectations:
+        # play_sound signature: (channel_status, period, duration, volume, env, ent, noise)
+        self.sound.play_sound(status, period, duration, volume, env, ent, noise)
+
+    def fw_sound_check(self):
+        status = 0
+        if (self.sound.get_sq_status(1) & 7) == 4: status |= 1 # A free
+        if (self.sound.get_sq_status(2) & 7) == 4: status |= 2 # B free
+        if (self.sound.get_sq_status(4) & 7) == 4: status |= 4 # C free
+        self.z80.A = status
+        
+    def fw_mc_wait_flyback(self):
+        current_time = pygame.time.get_ticks()
+        if not hasattr(self, 'last_flyback'):
+            self.last_flyback = current_time
+            
+        wait_time = 20 - (current_time - self.last_flyback)
+        if wait_time > 0:
+            pygame.time.wait(wait_time)
+            
+        self.display.update()
+        self.last_flyback = pygame.time.get_ticks()
 
     def get_joy_state(self, joy_id):
         keys = pygame.key.get_pressed()
@@ -362,7 +503,11 @@ class Interpreter:
                         return self.arr_dict.get(tuple(int(a) for a in args), "" if self.is_string else 0)
                 
                 eval_globals = self.builtins.copy()
-                eval_globals['GET_VAR'] = lambda name: self.variables.get(name, self.get_default_value(name))
+                def get_var_or_reg(name):
+                    if name.startswith('_REG_'):
+                        return getattr(self.z80, name[5:], 0)
+                    return self.variables.get(name, self.get_default_value(name))
+                eval_globals['GET_VAR'] = get_var_or_reg
                 eval_globals['GET_INKEY_STR'] = lambda: self.display.get_inkey_str()
                 
                 for arr_name, arr_dict in self.arrays.items():
@@ -690,7 +835,10 @@ class Interpreter:
 
                 elif isinstance(stmt, LetStatement):
                     val = self.evaluate(stmt.expr)
-                    self.variables[stmt.identifier] = self.typecast(stmt.identifier, val)
+                    if stmt.identifier.startswith('_REG_'):
+                        setattr(self.z80, stmt.identifier[5:], int(val))
+                    else:
+                        self.variables[stmt.identifier] = self.typecast(stmt.identifier, val)
                     
                 elif isinstance(stmt, DimStatement):
                     for var_name, dims in stmt.arrays:
@@ -782,13 +930,10 @@ class Interpreter:
                     else:
                         try: addr = int(addr)
                         except: addr = 0
-                    if addr == 0xBB18: # KM WAIT CHAR / PAUSE
-                        while True:
-                            self.display.process_events()
-                            if self.display.key_buffer:
-                                self.display.key_buffer.pop(0)
-                                break
-                            pygame.time.wait(10)
+                    if addr in self.firmware_hooks:
+                        self.firmware_hooks[addr]()
+                    else:
+                        print(f"Warning: Unimplemented CALL &{addr:04X}")
 
                 elif isinstance(stmt, GotoStatement):
                     target = int(self.evaluate(stmt.line_number))
@@ -1272,6 +1417,8 @@ class Interpreter:
                     addr = int(self.evaluate(stmt.address)) & 0xFFFF
                     val = int(self.evaluate(stmt.value)) & 0xFF
                     self.ram[addr] = val
+                    if addr >= 0xC000:
+                        self.display.poke_video_ram(addr, val)
                         
                 elif isinstance(stmt, NextStatement):
                     identifiers = getattr(stmt, 'identifiers', [stmt.identifier])

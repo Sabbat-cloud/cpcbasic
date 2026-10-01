@@ -20,11 +20,11 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 - **Fuente de Píxeles Original**: Integra la fuente de píxeles original del CPC464 para una experiencia de renderizado de texto 1:1 (`LOCATE`, `PRINT`, `PEN`, `PAPER`).
 - **Audio Procedural (AY-3-8912)**: Interpreta de manera precisa el comando `SOUND` y genera ondas cuadradas y ruido blanco procedurales en tiempo real mediante `numpy` y el mixer de Pygame.
 - **Interacción con Teclado y Joysticks**: Soporte para lectura asíncrona de teclado (`INKEY$`, `INKEY`), pausas de hardware (`CALL &BB18`, `PAUSE 0`) y joysticks simulados mediante Pygame (`JOY`).
-- **Memoria Virtual (PEEK/POKE)**: Implementa una matriz de RAM virtual de 64KB y llamadas a memoria simuladas (`CALL`), lo que permite que scripts antiguos se ejecuten sin lanzar errores por falta de memoria.
+- **Arquitectura de Emulación Híbrida (Memoria y Z80)**: Implementa una matriz de RAM virtual de 64KB con sincronización bidireccional de vídeo. Los comandos `PEEK` y `POKE` sobre la memoria del CRTC (`&C000` a `&FFFF`) interactúan dinámicamente con los píxeles de PyGame, replicando la estructura del hardware original. Además, dispone de un "Z80 Fantasma" (registros `_REG_A`, `_REG_HL`, etc.) que te permite alterar directamente el estado del procesador desde el propio código BASIC antes de lanzar un comando `CALL` al firmware.
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
 - **Ejecución Optimizada y Control de Velocidad**: Generación y caché de código AST en segundo plano, consiguiendo velocidades ultrarrápidas en modo de ejecución sin límites. Adicionalmente ofrece un límite opcional que reproduce la velocidad exacta de ejecución del procesador original del Amstrad CPC 6128.
 
-*(Nota: No soporta archivos BASIC binarios tokenizados ni binarios de código máquina Z80 compilados, dado que es un intérprete de lenguaje de alto nivel, no un emulador de CPU).*
+*(Nota: No soporta archivos BASIC binarios tokenizados ni binarios nativos de código máquina Z80 compilados, dado que es un intérprete de alto nivel, no un emulador puro de hardware. Sin embargo, gracias al Z80 fantasma, intercepta llamadas de firmware nativas de Amstrad ROM y emula su respuesta directamente en Python).*
 
 **⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa temprana de desarrollo. Muchas características podrían fallar.**
 
@@ -74,7 +74,7 @@ La respuesta corta es por diversión. Crecí con el BASIC del Amstrad CPC y a ve
 Se pueden editar los listados con el programa que quieras sin tener que depender del emulador, montar unidades de disco, etc.
 Actualmente ya está soportado el acceso aleatorio a ficheros, con lo que podemos escribir, leer y modificar cualquier fichero de nuestro PC para procesarlo con nuestros programas en BASIC.
 Por supuesto, también está la ausencia de limitación de memoria y el aumento de la velocidad.
-Sus carencias más obvias son la falta de llamadas directas al firmware o código máquina. Aunque `CALL &BB18` y otros que iré poniendo funcionarán, no son llamadas reales: simulan la instrucción.
+Su carencia más obvia es la falta de ejecución completa y pura de código máquina. Sin embargo, gracias a la nueva Arquitectura Híbrida, las llamadas estándar al firmware (como `CALL &BB5A`, `CALL &BB18`) son interceptadas. ¡Puedes manipular los registros virtuales del procesador Z80 directamente desde BASIC usando variables especiales (ej. `_REG_A = 65`) antes de llamar al firmware, y el motor en Python simulará la respuesta del hardware al instante leyendo tus registros y ejecutando la rutina!
 
 
 ## Créditos y Agradecimientos

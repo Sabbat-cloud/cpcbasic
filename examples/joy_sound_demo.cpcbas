@@ -1,0 +1,25 @@
+10 MODE 1
+20 PRINT "Test de Joystick y Sonido a traves de Firmware"
+30 PRINT "Usa las flechas (o WASD) para hacer sonar notas!"
+40 PRINT "Pulsa Espacio para salir."
+50 ' Bucle de lectura
+60 CALL &BB24
+70 j = _REG_A
+80 IF j = 0 THEN 60
+90 IF (j AND 16) > 0 THEN END ' Espacio pulsado
+100 IF (j AND 1) > 0 THEN P = 142 ' Up (La)
+110 IF (j AND 2) > 0 THEN P = 284 ' Down (La mas grave)
+120 IF (j AND 4) > 0 THEN P = 213 ' Left (Re)
+130 IF (j AND 8) > 0 THEN P = 190 ' Right (Mi)
+140 ' Preparamos el bloque de sonido en RAM (usamos &4000)
+150 POKE &4000, 1   ' Status: Canal A
+160 POKE &4001, 0   ' Env 0
+170 POKE &4002, 0   ' Ent 0
+180 POKE &4003, P MOD 256 : POKE &4004, INT(P/256) ' Periodo
+190 POKE &4005, 0   ' Ruido
+200 POKE &4006, 12  ' Volumen
+210 POKE &4007, 20  ' Duracion 20
+220 POKE &4008, 0
+230 ' Llamamos a SOUND QUEUE (&BCAA) con HL = &4000
+240 _REG_H = &40 : _REG_L = 0 : CALL &BCAA
+250 GOTO 60

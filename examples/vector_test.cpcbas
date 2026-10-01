@@ -1,0 +1,10 @@
+10 MODE 1
+20 PLOT 0, 398, 1
+30 MOVE 0, 398
+40 DRAW 638, 398, 2
+45 LOCATE 1, 10
+50 PRINT "Test de PEEK en linea dibujada (arriba izq):"
+60 PRINT "PEEK(&C000) = "; PEEK(&C000)
+70 PRINT "Y ahora leemos de vuelta con PEEK(&C000): "; PEEK(&C000)
+80 PRINT "Pulsa una tecla para salir..."
+90 CALL &BB18

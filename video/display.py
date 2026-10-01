@@ -159,6 +159,76 @@ class Display:
     def set_graphics_paper(self, paper):
         if 0 <= paper < 16:
             self.graphics_paper = paper
+
+    def poke_video_ram(self, addr, val):
+        offset = addr - 0xC000
+        y_char = (offset // 80) % 25
+        y_scan = (offset // 2048) % 8
+        x_byte = offset % 80
+        
+        sy = (y_char * 8 + y_scan) * 2
+        sx = x_byte * 8
+        
+        if self.mode == 1:
+            pw = 2
+            for i in range(4):
+                bit0 = (val >> (7 - i)) & 1
+                bit1 = (val >> (3 - i)) & 1
+                pen = (bit1 << 1) | bit0
+                rect = pygame.Rect(sx + i * pw, sy, pw, 2)
+                pygame.draw.rect(self.logical_surface, pen, rect)
+        elif self.mode == 0:
+            pw = 4
+            for i in range(2):
+                pen = (val >> (i * 4)) & 0xF
+                rect = pygame.Rect(sx + i * pw, sy, pw, 2)
+                pygame.draw.rect(self.logical_surface, pen, rect)
+        elif self.mode == 2:
+            pw = 1
+            for i in range(8):
+                pen = (val >> (7 - i)) & 1
+                rect = pygame.Rect(sx + i * pw, sy, pw, 2)
+                pygame.draw.rect(self.logical_surface, pen, rect)
+        
+        self.scale_dirty = True
+
+    def peek_video_ram(self, addr):
+        offset = addr - 0xC000
+        y_char = (offset // 80) % 25
+        y_scan = (offset // 2048) % 8
+        x_byte = offset % 80
+        
+        sy = (y_char * 8 + y_scan) * 2
+        sx = x_byte * 8
+        
+        if sy >= 400 or sx >= 640:
+            return 0
+            
+        byte_val = 0
+        if self.mode == 1:
+            pw = 2
+            for i in range(4):
+                col = self.logical_surface.get_at((sx + i * pw, sy))[0]
+                pen = col  # On an 8-bit surface, get_at() returns (index, index, index, 255) in pygame 2+ or just the mapped color. Actually, it returns RGBA.
+                # Wait, pygame get_at on 8-bit surface returns RGBA. We need mapped index.
+                # Since get_at on 8-bit palette surface might return RGB, let's just find the closest pen.
+                # Wait, Surface.get_at_mapped() returns the integer index!
+                pen = self.logical_surface.get_at_mapped((sx + i * pw, sy))
+                bit0 = pen & 1
+                bit1 = (pen >> 1) & 1
+                byte_val |= (bit0 << (7 - i)) | (bit1 << (3 - i))
+        elif self.mode == 0:
+            pw = 4
+            for i in range(2):
+                pen = self.logical_surface.get_at_mapped((sx + i * pw, sy))
+                byte_val |= (pen & 0xF) << (i * 4)
+        elif self.mode == 2:
+            pw = 1
+            for i in range(8):
+                pen = self.logical_surface.get_at_mapped((sx + i * pw, sy))
+                byte_val |= (pen & 1) << (7 - i)
+                
+        return byte_val
             
     def set_graphics_write_mode(self, mode):
         if mode in (0, 1, 2, 3):
