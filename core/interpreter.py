@@ -596,7 +596,7 @@ class Interpreter:
         self.stmts_this_frame = 0
         self.stmts_since_event = 0
         self.last_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
-        statements_limit = 42 # Approx. real CPC BASIC statements per 20ms frame (gives ~4.7s for 5000 empty FOR loops)
+        statements_limit = 37 # Approx. real CPC BASIC statements per 20ms frame (gives ~5.44s for 5000 empty FOR loops)
         
         while self.running and self.pc is not None:
             if getattr(self.display, 'quit_requested', False):
