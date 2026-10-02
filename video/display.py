@@ -836,6 +836,8 @@ class Display:
                 self.quit_requested = True
                 pygame.display.quit()
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.esc_pressed = getattr(self, 'esc_pressed', False) or True
                 if event.unicode:
                     self.key_buffer.append(event.unicode)
 

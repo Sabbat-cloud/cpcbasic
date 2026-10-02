@@ -168,6 +168,34 @@ class EmulatorGUI:
     def execute_repl(self, event):
         cmd = self.repl_entry.get()
         self.repl_entry.delete(0, tk.END)
+        
+        import re
+        m_load = re.match(r'^\s*LOAD\s+"([^"]+)"', cmd, re.IGNORECASE)
+        if m_load:
+            filename = m_load.group(1)
+            try:
+                with open(filename, 'r', encoding='utf-8') as f:
+                    code = f.read()
+                self.editor_text.delete('1.0', tk.END)
+                self.editor_text.insert(tk.END, code)
+                print(f"[IDE] Archivo '{filename}' cargado en el editor.")
+                # We load it into memory but do not execute it automatically
+                self.repl_queue.put(('LOAD_ONLY', code))
+            except Exception as e:
+                print(f"[IDE] Error cargando '{filename}': {e}")
+            return
+            
+        m_save = re.match(r'^\s*SAVE\s+"([^"]+)"', cmd, re.IGNORECASE)
+        if m_save:
+            filename = m_save.group(1)
+            try:
+                with open(filename, 'w', encoding='utf-8') as f:
+                    f.write(self.editor_text.get('1.0', tk.END).strip() + '\n')
+                print(f"[IDE] Archivo '{filename}' guardado desde el editor.")
+            except Exception as e:
+                print(f"[IDE] Error guardando '{filename}': {e}")
+            return
+
         self.repl_queue.put(('CMD', cmd))
 
     def update_memory_dump(self):
@@ -206,6 +234,12 @@ class EmulatorGUI:
                     print("[THREAD] Calling execute()...")
                     self.interpreter.execute()
                     print("[THREAD] execute() returned.")
+                elif cmd_type == 'LOAD_ONLY':
+                    lexer = Lexer(data)
+                    parser = Parser(lexer.tokens)
+                    self.interpreter.program = parser.parse()
+                    self.interpreter.line_numbers = sorted(list(self.interpreter.program.lines.keys()))
+                    print("[THREAD] Program loaded into memory.")
                 elif cmd_type == 'CMD':
                     lexer = Lexer(data)
                     parser = Parser(lexer.tokens)

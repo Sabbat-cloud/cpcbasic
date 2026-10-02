@@ -1,0 +1,17 @@
+10 PRINT "=== TEST DE ON ERROR GOTO Y RESUME NEXT ==="
+20 ON ERROR GOTO 500
+30 PRINT "Provocando division por cero..."
+40 A = 1 / 0 : PRINT "   >> RESUME NEXT REANUDO AQUI! CORRECTO!"
+50 PRINT "   -> Este comando esta en otra linea. Correcto."
+60 PRINT "--------------------------------------------"
+70 PRINT "=== TEST DE INTERRUPCIONES ASINCRONAS ==="
+80 EVERY 5, 1 GOSUB 600
+90 PRINT "Contando..."
+100 FOR I=1 TO 5
+110 PRINT I;"... "; : FOR J=1 TO 500 : NEXT J : PRINT "ok"
+120 NEXT I
+130 END
+500 PRINT "   -> ERROR CAPTURADO! CODIGO:"; ERR; "LINEA:"; ERL
+510 RESUME NEXT
+600 PRINT "   [INTERRUPCION TIMER DISPARADA!]"
+610 RETURN
