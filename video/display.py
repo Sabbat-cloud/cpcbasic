@@ -122,6 +122,7 @@ class Display:
             self.flash_inks[15] = 11
             self.current_pen = 1
             self.current_paper = 0
+            self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
             self._update_palette(False)
             self.logical_surface.fill(self.current_paper)
             self.update()
@@ -765,6 +766,9 @@ class Display:
         self.speed_ink_1 = max(1, time1 * 20)
         self.speed_ink_2 = max(1, time2 * 20)
 
+    def set_speed_key(self, start_delay, repeat_period):
+        pygame.key.set_repeat(start_delay * 20, repeat_period * 20)
+
     def _get_screen(self, num):
         if num == 1:
             return self.logical_surface
@@ -829,8 +833,8 @@ class Display:
     def process_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit(0)
+                self.quit_requested = True
+                pygame.display.quit()
             elif event.type == pygame.KEYDOWN:
                 if event.unicode:
                     self.key_buffer.append(event.unicode)
@@ -843,10 +847,13 @@ class Display:
     def input_string(self, stream=0):
         input_str = ""
         while True:
+            if getattr(self, 'quit_requested', False):
+                return ""
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit(0)
+                    self.quit_requested = True
+                    pygame.display.quit()
+                    return ""
                 elif event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
                         self.print_text('\r\n', stream=stream)

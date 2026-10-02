@@ -91,3 +91,30 @@ class DSKManager:
                 print(f"Error leyendo {filename}: {e}")
                 
         return None
+
+    def write_file(self, filename, code_str):
+        """
+        Guarda un archivo de texto en el disco virtual (directorio temporal)
+        y también en el disco del host en una carpeta 'saved_files' para que sea persistente.
+        """
+        if not self.mounted:
+            return False
+            
+        target_path = os.path.join(self.temp_dir, filename.upper())
+        try:
+            # Cabecera AMSDOS de 128 bytes (dummy) para mantener compatibilidad con read_file
+            header = bytearray(128)
+            code_bytes = code_str.encode('utf-8')
+            with open(target_path, "wb") as f:
+                f.write(header + code_bytes)
+                
+            # Guardar también permanentemente
+            save_dir = os.path.join(os.getcwd(), "saved_files")
+            os.makedirs(save_dir, exist_ok=True)
+            perm_path = os.path.join(save_dir, filename.upper() + ".BAS")
+            with open(perm_path, "w", encoding='utf-8') as f:
+                f.write(code_str)
+            return True
+        except Exception as e:
+            print(f"Error guardando {filename}: {e}")
+            return False

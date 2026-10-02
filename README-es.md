@@ -23,6 +23,9 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 - **Arquitectura de Emulación Híbrida (Memoria y Z80)**: Implementa una matriz de RAM virtual de 64KB con sincronización bidireccional de vídeo. Los comandos `PEEK` y `POKE` sobre la memoria del CRTC (`&C000` a `&FFFF`) interactúan dinámicamente con los píxeles de PyGame, replicando la estructura del hardware original. Además, dispone de un "Z80 Fantasma" (registros `_REG_A`, `_REG_HL`, etc.) que te permite alterar directamente el estado del procesador desde el propio código BASIC antes de lanzar un comando `CALL` al firmware.
 - **Soporte de Lectura de Discos (.dsk)**: Montaje "al vuelo" de archivos `.dsk`. Extrae y ejecuta de forma transparente archivos BASIC en texto plano (ASCII) almacenados dentro de formatos AMSDOS.
 - **Ejecución Optimizada y Control de Velocidad**: Generación y caché de código AST en segundo plano, consiguiendo velocidades ultrarrápidas en modo de ejecución sin límites. Adicionalmente ofrece un límite opcional que reproduce la velocidad exacta de ejecución del procesador original del Amstrad CPC 6128.
+- **Entorno IDE Integrado (`emulator_app.py`)**: Interfaz gráfica de usuario (GUI) completa desarrollada en Tkinter con pestañas que incluyen un Editor interactivo con control de ejecución instantáneo, un panel de Depuración (Debugger) en tiempo real para los registros de la CPU Z80 y un visor de Memoria.
+- **Soporte de Comandos de Entorno CPC**: Implementa un vasto conjunto de comandos de entorno de Amstrad (`SPEED INK`, `SPEED KEY`, `MODE`, `ENV`, `ENT`, `OUT`, `WAIT`, `CURSOR`, `PLOTR`, `WIDTH`, `WINDOW SWAP`, `SWAP`, `AUTO`, `CAT`, `CHAIN`, `MERGE`, `DELETE`, `RENUM`, etc).
+- **Persistencia en Discos DSK**: Mediante el editor integrado y los comandos `SAVE` y `LOAD`, es posible guardar y cargar programas BASIC en formato texto plano directamente al entorno virtual de un `.dsk` en tiempo real.
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios nativos de código máquina Z80 compilados, dado que es un intérprete de alto nivel, no un emulador puro de hardware. Sin embargo, gracias al Z80 fantasma, intercepta llamadas de firmware nativas de Amstrad ROM y emula su respuesta directamente en Python).*
 
@@ -44,7 +47,15 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 ## Uso
 
-Puedes ejecutar el emulador pasándole un script BASIC como argumento. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`. También puedes controlar la velocidad de ejecución con el parámetro `--speed` (utiliza `real` para simular el hardware original o `unlimited` para máxima velocidad).
+### Entorno IDE Integrado (Recomendado)
+Puedes iniciar el entorno gráfico de desarrollo con el editor de código integrado, el depurador de hardware y los controles de ejecución interactivos mediante:
+```bash
+python emulator_app.py
+```
+Desde aquí podrás escribir tu código, ejecutarlo al instante con un botón (y detenerlo), observar el estado de los registros Z80, y guardar o cargar tus programas directamente usando un entorno DSK virtual.
+
+### Ejecución por Línea de Comandos
+También puedes ejecutar el emulador en modo 'standalone' (independiente) pasándole un archivo BASIC (.cpcbas) o una imagen de disco (`.dsk`). La ventana de ejecución gráfica permanecerá abierta cuando termine el programa para que puedas examinar la salida final. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`. También puedes controlar la velocidad de ejecución con el parámetro `--speed` (utiliza `real` para simular el hardware original o `unlimited` para máxima velocidad).
 
 ```bash
 python main.py examples/matrix.cpcbas --scale 3 --speed real

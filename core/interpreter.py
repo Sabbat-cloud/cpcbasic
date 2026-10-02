@@ -16,7 +16,7 @@ from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, 
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement, ReleaseStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnSqStatement, CallStatement, ReleaseStatement, OutStatement, WaitStatement, CursorStatement, PlotrStatement, WidthStatement, WindowSwapStatement, SwapStatement, AutoStatement, CatStatement, ChainStatement, DeleteStatement, EditStatement, MemoryStatement, MergeStatement, RenumStatement, SaveStatement, LoadStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -28,6 +28,33 @@ def cpc_rnd(x=None): return random.random()
 from core.machine import Z80Registers
 
 class Interpreter:
+
+    def reset(self):
+        self.variables = {}
+        self.arrays = {}
+        self.for_loops = {}
+        self.for_stack = []
+        self.gosub_stack = []
+        if hasattr(self, 'while_stack'):
+            self.while_stack = []
+        self.timers = {0: None, 1: None, 2: None, 3: None}
+        self.data_values = []
+        self.data_ptr = 0
+        self.user_functions = {}
+        self.default_types = {chr(c): 'REAL' for c in range(ord('A'), ord('Z')+1)}
+        self.interrupts_enabled = True
+        self.angle_mode = 'RAD'
+        self.tag_active = False
+        self.err_code = 0
+        self.err_line = 0
+        if hasattr(self, 'display'):
+            import pygame
+            if pygame.display.get_surface() is None:
+                pygame.display.init()
+                self.display.screen = pygame.display.set_mode((self.display.width * self.display.scale, self.display.height * self.display.scale))
+            self.display.set_mode(1)
+            self.display.clear_input()
+
     def __init__(self, program, scale=2, speed='unlimited'):
         self.program = program
         self.speed = speed
@@ -63,7 +90,7 @@ class Interpreter:
             0xBC14: self.fw_scr_clear
         }
         
-        self.line_numbers = sorted(list(self.program.lines.keys()))
+        self.line_numbers = sorted(list(self.program.lines.keys())) if self.program else []
         self.for_loops = {}
         self.for_stack = []
         self.gosub_stack = []
@@ -187,6 +214,9 @@ class Interpreter:
 
     def fw_km_wait_char(self):
         while True:
+            if getattr(self.display, 'quit_requested', False):
+                self.running = False
+                return
             self.display.process_events()
             self.display.update()
             if self.display.key_buffer:
@@ -554,6 +584,14 @@ class Interpreter:
         self.collect_data()
         self.pc = self.line_numbers[0]
         self.running = True
+        if hasattr(self, 'display'):
+            import pygame
+            if pygame.display.get_surface() is None:
+                pygame.display.init()
+                self.display.screen = pygame.display.set_mode((self.display.width * self.display.scale, self.display.height * self.display.scale))
+                self.display.logical_surface.fill(self.display.current_paper)
+                self.display.update()
+            self.display.quit_requested = False
         
         self.stmts_this_frame = 0
         self.stmts_since_event = 0
@@ -561,6 +599,10 @@ class Interpreter:
         statements_limit = 42 # Approx. real CPC BASIC statements per 20ms frame (gives ~4.7s for 5000 empty FOR loops)
         
         while self.running and self.pc is not None:
+            if getattr(self.display, 'quit_requested', False):
+                self.running = False
+                self.display.quit_requested = False
+                break
             is_real_speed = getattr(self, 'speed', 'unlimited') == 'real'
             self.stmts_since_event += 1
             
@@ -972,6 +1014,17 @@ class Interpreter:
                         self.running = False
                         break
                         
+
+                elif isinstance(stmt, SaveStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    if hasattr(self, 'display'):
+                        self.display.print_text(f"SAVE '{filename}' - Use IDE Editor to save\r\n")
+
+                elif isinstance(stmt, LoadStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    if hasattr(self, 'display'):
+                        self.display.print_text(f"LOAD '{filename}' - Use IDE Editor to load\r\n")
+
                 elif isinstance(stmt, EndStatement):
                     self.running = False
                     break
@@ -981,6 +1034,167 @@ class Interpreter:
                     print(f"[VIDEO] Setting MODE {mode}")
                     self.display.set_mode(mode)
                     
+                elif isinstance(stmt, OutStatement):
+                    port = int(self.evaluate(stmt.port))
+                    value = int(self.evaluate(stmt.value))
+                    # CPC hardware out stub
+                    pass
+
+                elif isinstance(stmt, WaitStatement):
+                    port = int(self.evaluate(stmt.port))
+                    mask = int(self.evaluate(stmt.mask))
+                    invert = int(self.evaluate(stmt.invert)) if getattr(stmt, 'invert', None) is not None else 0
+                    # stub wait
+
+                elif isinstance(stmt, CursorStatement):
+                    s1 = int(self.evaluate(stmt.switch))
+                    s2 = int(self.evaluate(stmt.switch2)) if getattr(stmt, 'switch2', None) is not None else None
+                    if hasattr(self.display, 'set_cursor'):
+                        self.display.set_cursor(s1, s2)
+
+                elif isinstance(stmt, PlotrStatement):
+                    x = int(self.evaluate(stmt.x))
+                    y = int(self.evaluate(stmt.y))
+                    pen = int(self.evaluate(stmt.pen)) if getattr(stmt, 'pen', None) is not None else None
+                    curr_x = getattr(self.display, 'graphics_x', 0)
+                    curr_y = getattr(self.display, 'graphics_y', 0)
+                    self.display.plot(curr_x + x, curr_y + y, pen)
+
+                elif isinstance(stmt, WidthStatement):
+                    w = int(self.evaluate(stmt.width))
+                    # stub width
+
+                elif isinstance(stmt, WindowSwapStatement):
+                    s1 = int(self.evaluate(stmt.stream1))
+                    s2 = int(self.evaluate(stmt.stream2))
+                    if hasattr(self.display, 'streams'):
+                        tmp = self.display.streams.get(s1, {})
+                        self.display.streams[s1] = self.display.streams.get(s2, {})
+                        self.display.streams[s2] = tmp
+
+                elif isinstance(stmt, AutoStatement):
+                    line_num = int(self.evaluate(stmt.line_number)) if getattr(stmt, 'line_number', None) else 10
+                    step = int(self.evaluate(stmt.step)) if getattr(stmt, 'step', None) else 10
+                    self.display.print(f"AUTO {line_num},{step} - Use IDE Editor instead\r\n")
+
+                elif isinstance(stmt, CatStatement):
+                    dsk = getattr(self, 'dsk', None)
+                    if dsk and getattr(dsk, 'mounted', False):
+                        files = dsk.list_files()
+                        self.display.print("Drive A:\r\n")
+                        for f in files:
+                            self.display.print(f + "\r\n")
+                        self.display.print(f"{len(files)} file(s)\r\n")
+                    else:
+                        self.display.print("Drive A: disc missing\r\n")
+
+                elif isinstance(stmt, ChainStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    dsk = getattr(self, 'dsk', None)
+                    if dsk and getattr(dsk, 'mounted', False):
+                        code = dsk.read_file(filename)
+                        if code:
+                            if not stmt.is_merge:
+                                self.program.lines.clear()
+                            
+                            from core.lexer import Lexer
+                            from core.parser import Parser
+                            l = Lexer(code)
+                            p = Parser(l.tokens)
+                            new_prog = p.parse()
+                            for ln, stmts in new_prog.lines.items():
+                                self.program.lines[ln] = stmts
+                            self.line_numbers = sorted(list(self.program.lines.keys()))
+                            
+                            if getattr(stmt, 'line_number', None):
+                                target_ln = int(self.evaluate(stmt.line_number))
+                                if target_ln in self.line_numbers:
+                                    self.pc = target_ln
+                                else:
+                                    self.pc = self.line_numbers[0] if self.line_numbers else None
+                            else:
+                                self.pc = self.line_numbers[0] if self.line_numbers else None
+                            break
+                        else:
+                            self.display.print(f"File '{filename}' not found\r\n")
+                    else:
+                        self.display.print("Drive A: disc missing\r\n")
+
+                elif isinstance(stmt, DeleteStatement):
+                    s_line = int(self.evaluate(stmt.start_line)) if getattr(stmt, 'start_line', None) else 0
+                    e_line = int(self.evaluate(stmt.end_line)) if getattr(stmt, 'end_line', None) else 65535
+                    lines_to_delete = [ln for ln in self.line_numbers if s_line <= ln <= e_line]
+                    for ln in lines_to_delete:
+                        del self.program.lines[ln]
+                    self.line_numbers = sorted(list(self.program.lines.keys()))
+                    self.display.print("Deleted.\r\n")
+
+                elif isinstance(stmt, EditStatement):
+                    self.display.print(f"EDIT - Use IDE Editor instead\r\n")
+
+                elif isinstance(stmt, MemoryStatement):
+                    addr = int(self.evaluate(stmt.address))
+                    self.builtins["HIMEM"] = lambda: addr
+                    self.display.print(f"Memory bounds set to {addr}\r\n")
+
+                elif isinstance(stmt, MergeStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    dsk = getattr(self, 'dsk', None)
+                    if dsk and getattr(dsk, 'mounted', False):
+                        code = dsk.read_file(filename)
+                        if code:
+                            from core.lexer import Lexer
+                            from core.parser import Parser
+                            l = Lexer(code)
+                            p = Parser(l.tokens)
+                            new_prog = p.parse()
+                            for ln, stmts in new_prog.lines.items():
+                                self.program.lines[ln] = stmts
+                            self.line_numbers = sorted(list(self.program.lines.keys()))
+                        else:
+                            self.display.print(f"File '{filename}' not found\r\n")
+                    else:
+                        self.display.print("Drive A: disc missing\r\n")
+
+                elif isinstance(stmt, RenumStatement):
+                    new_st = int(self.evaluate(stmt.new_start)) if getattr(stmt, 'new_start', None) else 10
+                    old_st = int(self.evaluate(stmt.old_start)) if getattr(stmt, 'old_start', None) else self.line_numbers[0] if self.line_numbers else 10
+                    step = int(self.evaluate(stmt.step)) if getattr(stmt, 'step', None) else 10
+                    
+                    old_lines = [ln for ln in self.line_numbers if ln >= old_st]
+                    mapping = {}
+                    curr_new = new_st
+                    for ln in old_lines:
+                        mapping[ln] = curr_new
+                        curr_new += step
+                        
+                    new_prog = {}
+                    for ln in self.line_numbers:
+                        if ln in mapping:
+                            new_prog[mapping[ln]] = self.program.lines[ln]
+                        else:
+                            new_prog[ln] = self.program.lines[ln]
+                    self.program.lines = new_prog
+                    self.line_numbers = sorted(list(self.program.lines.keys()))
+                    self.display.print("Renumbered.\r\n")
+
+                elif isinstance(stmt, SaveStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    self.display.print(f"SAVE '{filename}' - Use IDE Editor to save\r\n")
+
+                elif isinstance(stmt, LoadStatement):
+                    filename = str(self.evaluate(stmt.filename))
+                    self.display.print(f"LOAD '{filename}' - Use IDE Editor instead\r\n")
+
+                elif isinstance(stmt, SwapStatement):
+                    # var1 and var2 are identifiers
+                    var1 = stmt.var1.upper()
+                    var2 = stmt.var2.upper()
+                    v1 = self.variables.get(var1, 0)
+                    v2 = self.variables.get(var2, 0)
+                    self.variables[var1] = v2
+                    self.variables[var2] = v1
+
                 elif isinstance(stmt, PlotStatement):
                     x = int(self.evaluate(stmt.x))
                     y = int(self.evaluate(stmt.y))
@@ -1177,14 +1391,16 @@ class Interpreter:
                     self.display.set_graphics_paper(paper)
 
                 elif isinstance(stmt, SpeedStatement):
-                    if stmt.type_ == 'INK':
-                        if len(stmt.params) >= 2:
-                            t1 = int(self.evaluate(stmt.params[0]))
-                            t2 = int(self.evaluate(stmt.params[1]))
+                    if stmt.target == 'INK':
+                        if stmt.expr1 is not None:
+                            t1 = int(self.evaluate(stmt.expr1))
+                            t2 = int(self.evaluate(stmt.expr2)) if stmt.expr2 is not None else t1
                             self.display.set_speed_ink(t1, t2)
-                        elif len(stmt.params) == 1:
-                            t1 = int(self.evaluate(stmt.params[0]))
-                            self.display.set_speed_ink(t1, t1)
+                    elif stmt.target == 'KEY':
+                        if stmt.expr1 is not None and stmt.expr2 is not None:
+                            t1 = int(self.evaluate(stmt.expr1))
+                            t2 = int(self.evaluate(stmt.expr2))
+                            self.display.set_speed_key(t1, t2)
                     # KEY speed is ignored for now
 
                 elif isinstance(stmt, EnvStatement):
@@ -1458,10 +1674,6 @@ class Interpreter:
             
         # Keep window open when execution finishes
         if hasattr(self, 'display'):
-            while True:
-                self.display.process_events()
-                self.display.update()
-                if 'pygame' in sys.modules:
-                    pygame.time.wait(20)
+            self.display.update()
 
 

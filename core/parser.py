@@ -396,6 +396,74 @@ class BinOp(Expr):
         self.op = op
         self.right = right
 
+class AutoStatement(Statement):
+    def __init__(self, line_number=None, step=None):
+        self.line_number = line_number
+        self.step = step
+class CatStatement(Statement): pass
+class ChainStatement(Statement):
+    def __init__(self, filename, is_merge=False, line_number=None):
+        self.filename = filename
+        self.is_merge = is_merge
+        self.line_number = line_number
+class DeleteStatement(Statement):
+    def __init__(self, start_line=None, end_line=None):
+        self.start_line = start_line
+        self.end_line = end_line
+class EditStatement(Statement):
+    def __init__(self, line_number):
+        self.line_number = line_number
+class MemoryStatement(Statement):
+    def __init__(self, address):
+        self.address = address
+class MergeStatement(Statement):
+    def __init__(self, filename):
+        self.filename = filename
+class RenumStatement(Statement):
+    def __init__(self, new_start=None, old_start=None, step=None):
+        self.new_start = new_start
+        self.old_start = old_start
+        self.step = step
+class SaveStatement(Statement):
+    def __init__(self, filename, file_type=None, address=None, length=None, entry_point=None):
+        self.filename = filename
+        self.file_type = file_type
+        self.address = address
+        self.length = length
+        self.entry_point = entry_point
+class LoadStatement(Statement):
+    def __init__(self, filename, address=None):
+        self.filename = filename
+        self.address = address
+class OutStatement(Statement):
+    def __init__(self, port, value):
+        self.port = port
+        self.value = value
+class WaitStatement(Statement):
+    def __init__(self, port, mask, invert=None):
+        self.port = port
+        self.mask = mask
+        self.invert = invert
+class CursorStatement(Statement):
+    def __init__(self, switch):
+        self.switch = switch
+class PlotrStatement(Statement):
+    def __init__(self, x, y, pen=None):
+        self.x = x
+        self.y = y
+        self.pen = pen
+class WidthStatement(Statement):
+    def __init__(self, width):
+        self.width = width
+class WindowSwapStatement(Statement):
+    def __init__(self, stream1, stream2):
+        self.stream1 = stream1
+        self.stream2 = stream2
+class SwapStatement(Statement):
+    def __init__(self, var1, var2):
+        self.var1 = var1
+        self.var2 = var2
+
 class Parser:
     def __init__(self, tokens):
         self.tokens = tokens
@@ -874,10 +942,197 @@ class Parser:
                     self.parse_expression()
                 return TagoffStatement()
 
+            elif self.current_token.value == 'OUT':
+                self.eat(KEYWORD)
+                port = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                value = self.parse_expression()
+                return OutStatement(port, value)
+                
+            elif self.current_token.value == 'WAIT':
+                self.eat(KEYWORD)
+                port = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                mask = self.parse_expression()
+                invert = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    invert = self.parse_expression()
+                return WaitStatement(port, mask, invert)
+                
+            elif self.current_token.value == 'CURSOR':
+                self.eat(KEYWORD)
+                switch = self.parse_expression()
+                return CursorStatement(switch)
+                
+            elif self.current_token.value == 'PLOTR':
+                self.eat(KEYWORD)
+                x = self.parse_expression()
+                self.eat(SYMBOL) # ,
+                y = self.parse_expression()
+                pen = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    pen = self.parse_expression()
+                return PlotrStatement(x, y, pen)
+                
+            elif self.current_token.value == 'WIDTH':
+                self.eat(KEYWORD)
+                width = self.parse_expression()
+                return WidthStatement(width)
+                
+            elif self.current_token.value == 'WINDOW':
+                self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'SWAP':
+                    self.eat(KEYWORD)
+                    s1 = self.parse_expression()
+                    self.eat(SYMBOL) # ,
+                    s2 = self.parse_expression()
+                    return WindowSwapStatement(s1, s2)
+
             elif self.current_token.value == 'ZONE':
                 self.eat(KEYWORD)
                 width = self.parse_expression()
                 return ZoneStatement(width)
+
+            elif self.current_token.value == 'AUTO':
+                self.eat(KEYWORD)
+                line_number = None
+                step = None
+                if self.current_token.type != NEWLINE and self.current_token.type != EOF and self.current_token.value != ':':
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        step = self.parse_expression()
+                    else:
+                        line_number = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            step = self.parse_expression()
+                return AutoStatement(line_number, step)
+
+            elif self.current_token.value == 'CAT':
+                self.eat(KEYWORD)
+                return CatStatement()
+
+            elif self.current_token.value == 'CHAIN':
+                self.eat(KEYWORD)
+                is_merge = False
+                if self.current_token.type == KEYWORD and self.current_token.value == 'MERGE':
+                    self.eat(KEYWORD)
+                    is_merge = True
+                filename = self.parse_expression()
+                line_number = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    line_number = self.parse_expression()
+                return ChainStatement(filename, is_merge, line_number)
+
+            elif self.current_token.value == 'DELETE':
+                self.eat(KEYWORD)
+                start_line = None
+                end_line = None
+                if self.current_token.type != NEWLINE and self.current_token.type != EOF and self.current_token.value != ':':
+                    if self.current_token.type == SYMBOL and self.current_token.value == '-':
+                        self.eat(SYMBOL)
+                        end_line = self.parse_expression()
+                    else:
+                        start_line = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == '-':
+                            self.eat(SYMBOL)
+                            if self.current_token.type != NEWLINE and self.current_token.type != EOF and self.current_token.value != ':':
+                                end_line = self.parse_expression()
+                return DeleteStatement(start_line, end_line)
+
+            elif self.current_token.value == 'EDIT':
+                self.eat(KEYWORD)
+                line_number = self.parse_expression()
+                return EditStatement(line_number)
+
+            elif self.current_token.value == 'MEMORY':
+                self.eat(KEYWORD)
+                address = self.parse_expression()
+                return MemoryStatement(address)
+
+            elif self.current_token.value == 'MERGE':
+                self.eat(KEYWORD)
+                filename = self.parse_expression()
+                return MergeStatement(filename)
+
+            elif self.current_token.value == 'RENUM':
+                self.eat(KEYWORD)
+                new_start = None
+                old_start = None
+                step = None
+                if self.current_token.type != NEWLINE and self.current_token.type != EOF and self.current_token.value != ':':
+                    new_start = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        if self.current_token.type != SYMBOL or self.current_token.value != ',':
+                            old_start = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            step = self.parse_expression()
+                return RenumStatement(new_start, old_start, step)
+
+            elif self.current_token.value == 'SAVE':
+                self.eat(KEYWORD)
+                filename = self.parse_expression()
+                file_type = None
+                address = None
+                length = None
+                entry = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    file_type = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        address = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            length = self.parse_expression()
+                            if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                                self.eat(SYMBOL)
+                                entry = self.parse_expression()
+                return SaveStatement(filename, file_type, address, length, entry)
+
+            elif self.current_token.value == 'LOAD':
+                self.eat(KEYWORD)
+                filename = self.parse_expression()
+                address = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    address = self.parse_expression()
+                return LoadStatement(filename, address)
+
+            elif self.current_token.value == 'SAVE':
+                self.eat(KEYWORD)
+                filename = self.parse_expression()
+                file_type = None
+                address = None
+                length = None
+                entry = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    file_type = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        address = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            length = self.parse_expression()
+                            if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                                self.eat(SYMBOL)
+                                entry = self.parse_expression()
+                return SaveStatement(filename, file_type, address, length, entry)
+
+            elif self.current_token.value == 'LOAD':
+                self.eat(KEYWORD)
+                filename = self.parse_expression()
+                address = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    address = self.parse_expression()
+                return LoadStatement(filename, address)
 
             elif self.current_token.value == 'SPEED':
                 self.eat(KEYWORD)

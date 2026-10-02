@@ -89,3 +89,14 @@ if __name__ == '__main__':
     interpreter = Interpreter(program, scale=args.scale, speed=args.speed)
     
     interpreter.execute()
+    if hasattr(interpreter, 'display'):
+        import pygame
+        while not getattr(interpreter.display, 'quit_requested', False):
+            try:
+                interpreter.display.process_events()
+                if not getattr(interpreter.display, 'quit_requested', False):
+                    interpreter.display.update()
+                pygame.time.wait(20)
+            except Exception:
+                break
+

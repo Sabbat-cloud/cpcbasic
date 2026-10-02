@@ -23,6 +23,9 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 - **Hybrid Emulation Architecture (Memory & Z80)**: Implements a 64KB virtual RAM array with bidirectional video-memory synchronization. `PEEK` and `POKE` commands operating on the CRTC memory area (`&C000` to `&FFFF`) will dynamically read and write pixels directly to the PyGame display, perfectly mimicking the Amstrad hardware layout. Furthermore, a "Ghost Z80" register system (`_REG_A`, `_REG_HL`, etc.) is exposed to the user, allowing BASIC variables to directly alter the virtual CPU state before executing firmware `CALL` instructions.
 - **Disk (.dsk) Read Support**: On-the-fly mounting of `.dsk` files. Seamlessly extracts and executes plain-text (ASCII) BASIC files stored within AMSDOS formats.
 - **Optimized Execution & Speed Control**: Features cached AST code generation for incredibly fast unlimited execution, while offering an optional speed throttle to replicate the original Amstrad CPC 6128 CPU speed.
+- **Integrated IDE (`emulator_app.py`)**: A fully featured graphical user interface built with Tkinter. It includes a multi-tabbed interface with an interactive Editor, real-time Z80 CPU register inspection, and Memory viewer.
+- **Full CPC Environment Support**: Implements an extensive set of environment commands (`SPEED INK`, `SPEED KEY`, `MODE`, `ENV`, `ENT`, `OUT`, `WAIT`, `CURSOR`, `PLOTR`, `WIDTH`, `WINDOW SWAP`, `SWAP`, `AUTO`, `CAT`, `CHAIN`, `MERGE`, `DELETE`, `RENUM`, etc).
+- **Persistent DSK Saving**: You can `SAVE` and `LOAD` BASIC programs directly to and from virtual `.dsk` files via the interactive Editor.
 
 *(Note: It does not support tokenized binary BASIC files or raw compiled Z80 machine code binaries, as it is a high-level interpreter rather than a cycle-accurate CPU emulator. However, it does intercept standard Amstrad ROM firmware `CALL`s and emulates their behavior natively in Python using the virtual Z80 registers).*
 
@@ -43,7 +46,15 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 
 ## Usage
 
-You can run the emulator by passing a BASIC script as an argument. The window is scaled x2 by default, but you can change it with `--scale`. You can also control the execution speed with the `--speed` parameter (use `real` for original hardware speed or `unlimited` for maximum speed).
+### Integrated IDE (Recommended)
+You can launch the full graphical environment with the integrated code editor, hardware debugger, and interactive execution controls:
+```bash
+python emulator_app.py
+```
+From here you can type code, run it instantly, examine the Z80 registers in real-time, and save/load your programs seamlessly into a virtual DSK environment.
+
+### Command Line Execution
+You can also run the emulator in standalone mode by passing a BASIC script or `.dsk` file as an argument. The execution window will remain open after the program finishes so you can view the final graphical output. The window is scaled x2 by default, but you can change it with `--scale`. You can also control the execution speed with the `--speed` parameter (use `real` for original hardware speed or `unlimited` for maximum speed).
 
 ```bash
 python main.py examples/matrix.cpcbas --scale 3 --speed real

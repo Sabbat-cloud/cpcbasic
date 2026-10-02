@@ -1,4 +1,7 @@
-1 mode 2
-10 for n=32 to 255
-20 print n;chr$(n);
-30 next n
+10 MODE 2
+20 FOR codigo=0 TO 31
+30   PRINT codigo;CHR$(1)CHR$(codigo);
+40 NEXT
+50 FOR codigo1=32 to 255
+60 PRINT codigo1;CHR$(codigo1);
+70 NEXT

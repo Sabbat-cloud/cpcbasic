@@ -12,16 +12,18 @@ NEWLINE = 'NEWLINE'
 KEYWORDS = {
     'PRINT', 'GOTO', 'GOSUB', 'RETURN', 'IF', 'THEN', 'ELSE',
     'FOR', 'TO', 'STEP', 'NEXT', 'WHILE', 'WEND', 'DIM', 'LET',
-    'MODE', 'PEN', 'PAPER', 'INK', 'BORDER', 'PLOT', 'DRAW', 'DRAWR', 'MOVE', 'MOVER', 'ORIGIN',
+    'MODE', 'PEN', 'PAPER', 'INK', 'KEY', 'BORDER', 'PLOT', 'DRAW', 'DRAWR', 'MOVE', 'MOVER', 'ORIGIN', 'PLOTR',
     'SOUND', 'ENV', 'ENT', 'CALL', 'LOAD', 'SAVE', 'RUN', 'LIST', 'NEW',
     'AND', 'OR', 'XOR', 'NOT', 'MOD', 'DEFINT', 'DEFREAL', 'DEFSTR',
     'LOCATE', 'CLS', 'CLG', 'CLEAR', 'END', 'STOP', 'DATA', 'READ', 'RESTORE',
     'REM', 'INPUT', 'SYMBOL', 'FRAME', 'MASK', 'ZONE', 'WINDOW', 'TRON', 'TROFF', 'TAG', 'TAGOFF',
-    'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS',
+    'ON', 'LEN', 'BREAK', 'CONT', 'SPEED', 'XPOS', 'YPOS', 'VPOS', 'POS',
     'RANDOMIZE', 'DEG', 'RAD', 'FILL', 'ERASE', 'EVERY', 'AFTER',
     'POKE', 'PEEK', 'JOY', 'DEF', 'DI', 'EI', 'GRAPHICS', 'USING',
     'ERROR', 'ERR', 'ERL', 'RESUME', 'SQ', 'PAUSE',
-    'OPENIN', 'OPENOUT', 'CLOSEIN', 'CLOSEOUT', 'EOF', 'WRITE', 'RELEASE'
+    'OPENIN', 'OPENOUT', 'CLOSEIN', 'CLOSEOUT', 'EOF', 'WRITE', 'RELEASE',
+    'INP', 'OUT', 'WAIT', 'CURSOR', 'WIDTH', 'DERR', 'FRE', 'HIMEM', 'SWAP',
+    'AUTO', 'CAT', 'CHAIN', 'DELETE', 'EDIT', 'MEMORY', 'MERGE', 'RENUM'
 }
 
 token_specification = [
