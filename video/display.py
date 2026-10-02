@@ -400,6 +400,9 @@ class Display:
                     elif self.esc_state == 22: # Transparent mode
                         self.transparent_text = (char_code != 0)
                         self.esc_state = 0
+                    elif self.esc_state == 23: # Graphics Write Mode
+                        self.set_graphics_write_mode(char_code % 4)
+                        self.esc_state = 0
                     elif self.esc_state == 31: # LOCATE
                         self.esc_args.append(char_code)
                         if len(self.esc_args) == 2:
@@ -447,6 +450,8 @@ class Display:
                     self.esc_state = 15
                 elif char_code == 22: # Set Transparent mode
                     self.esc_state = 22
+                elif char_code == 23: # Graphics Write Mode
+                    self.esc_state = 23
                 elif char_code == 24: # CAN (Inverse Video)
                     if hasattr(self, 'streams') and stream in self.streams:
                         tmp = self.streams[stream]['pen']
@@ -612,7 +617,20 @@ class Display:
         old_clip = self.logical_surface.get_clip()
         if hasattr(self, 'graphics_clip_rect'):
             self.logical_surface.set_clip(self.graphics_clip_rect)
-        pygame.draw.rect(self.logical_surface, pen, rect)
+        if self.graphics_write_mode == 1:
+            if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:
+                curr_pen = self.logical_surface.get_at_mapped((sx, sy))
+                pygame.draw.rect(self.logical_surface, curr_pen ^ pen, rect)
+        elif self.graphics_write_mode == 2:
+            if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:
+                curr_pen = self.logical_surface.get_at_mapped((sx, sy))
+                pygame.draw.rect(self.logical_surface, curr_pen & pen, rect)
+        elif self.graphics_write_mode == 3:
+            if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:
+                curr_pen = self.logical_surface.get_at_mapped((sx, sy))
+                pygame.draw.rect(self.logical_surface, curr_pen | pen, rect)
+        else:
+            pygame.draw.rect(self.logical_surface, pen, rect)
         self.logical_surface.set_clip(old_clip)
 
     def draw(self, x, y, pen=None):
@@ -632,11 +650,11 @@ class Display:
         if self.line_mask == 255 and self.mask_first == 1 and self.graphics_write_mode == 0:
             pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
         else:
-            dx = abs(end_x - start_x)
-            dy = abs(end_y - start_y)
-            sx = 1 if start_x < end_x else -1
-            sy = 1 if start_y < end_y else -1
-            err = dx - dy
+            dx_steps = abs(end_x - start_x) // width
+            dy_steps = abs(end_y - start_y) // 2
+            sx = width if start_x < end_x else -width
+            sy = 2 if start_y < end_y else -2
+            err = dx_steps - dy_steps
             
             cx, cy = start_x, start_y
             bit_idx = 7
@@ -659,6 +677,16 @@ class Display:
                             curr_pen = self.logical_surface.get_at_mapped((cx, cy))
                             new_pen = curr_pen ^ pen
                             pygame.draw.rect(self.logical_surface, new_pen, rect)
+                    elif self.graphics_write_mode == 2:
+                        if 0 <= cx < self.logical_width and 0 <= cy < self.logical_height:
+                            curr_pen = self.logical_surface.get_at_mapped((cx, cy))
+                            new_pen = curr_pen & pen
+                            pygame.draw.rect(self.logical_surface, new_pen, rect)
+                    elif self.graphics_write_mode == 3:
+                        if 0 <= cx < self.logical_width and 0 <= cy < self.logical_height:
+                            curr_pen = self.logical_surface.get_at_mapped((cx, cy))
+                            new_pen = curr_pen | pen
+                            pygame.draw.rect(self.logical_surface, new_pen, rect)
                     else:
                         pygame.draw.rect(self.logical_surface, pen, rect)
                 elif self.bg_mode == 0:
@@ -668,11 +696,11 @@ class Display:
                 if cx == end_x and cy == end_y:
                     break
                 e2 = 2 * err
-                if e2 > -dy:
-                    err -= dy
+                if e2 > -dy_steps:
+                    err -= dy_steps
                     cx += sx
-                if e2 < dx:
-                    err += dx
+                if e2 < dx_steps:
+                    err += dx_steps
                     cy += sy
                     
         self.logical_surface.set_clip(old_clip)

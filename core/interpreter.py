@@ -435,7 +435,8 @@ class Interpreter:
                         elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
                             s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                         elif val_upper in self.user_functions:
-                            s += f"USER_FN_{val_upper}"
+                            safe_fn = val_upper.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                            s += f"USER_FN_{safe_fn}"
                             # If called without parenthesis, add them
                             next_idx = i + 2 if skip_next else i + 1
                             if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
@@ -543,7 +544,8 @@ class Interpreter:
                     safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                     eval_globals[safe_name] = ArrayWrapper(arr_dict, arr_name.endswith('$'))
                 for fn_name, fn_func in self.user_functions.items():
-                    eval_globals[f"USER_FN_{fn_name}"] = fn_func
+                    safe_fn = fn_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                    eval_globals[f"USER_FN_{safe_fn}"] = fn_func
                     
                 return eval(code_obj, eval_globals, {})
             except ZeroDivisionError:
@@ -886,7 +888,7 @@ class Interpreter:
                             dims_eval = tuple(int(self.evaluate(d)) for d in stmt.dims)
                             if stmt.var_name not in self.arrays:
                                 self.arrays[stmt.var_name] = {}
-                            self.arrays[stmt.var_name][dims_eval] = val
+                            self.arrays[stmt.var_name][dims_eval] = self.typecast(stmt.var_name, val)
 
                     elif isinstance(stmt, LetStatement):
                         val = self.evaluate(stmt.expr)
@@ -1473,7 +1475,7 @@ class Interpreter:
                                     dims_eval = tuple(int(self.evaluate(d)) for d in dims)
                                     if var_name not in self.arrays:
                                         self.arrays[var_name] = {}
-                                    self.arrays[var_name][dims_eval] = val
+                                    self.arrays[var_name][dims_eval] = self.typecast(var_name, val)
                                 else:
                                     self.variables[var] = self.typecast(var, val)
                                 self.data_ptr += 1
@@ -1613,7 +1615,7 @@ class Interpreter:
                                     dims_eval = tuple(int(self.evaluate(d)) for d in dims)
                                     if var_name not in self.arrays:
                                         self.arrays[var_name] = {}
-                                    self.arrays[var_name][dims_eval] = parsed_val
+                                    self.arrays[var_name][dims_eval] = self.typecast(var_name, parsed_val)
                                 else:
                                     self.variables[var_name] = parsed_val
 

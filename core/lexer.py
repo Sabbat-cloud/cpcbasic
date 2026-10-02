@@ -65,7 +65,11 @@ class Lexer:
         for line in lines:
             if not line.strip():
                 continue
-            if line.lstrip()[0].isdigit():
+            
+            # A valid BASIC line number is followed by space, letter (like 10PRINT), apostrophe, or end of string.
+            # It is NOT followed by a comma (like 240,)
+            m = re.match(r'^\s*\d+(?:\s|[A-Za-z\']|$)', line)
+            if m:
                 fixed_lines.append(line.rstrip('\r'))
             else:
                 if fixed_lines:

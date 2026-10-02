@@ -652,15 +652,20 @@ class Parser:
                                     s += " " * (t.column - last_col)
                                 s += str(t.value)
                                 last_col = t.column + len(str(t.value))
-                                if t.type not in (NUMBER, HEX_NUMBER) and not (t.type == SYMBOL and t.value in ('+', '-', '.')):
+                                if t.type not in (NUMBER, 'HEX_NUMBER', 'BIN_NUMBER') and not (t.type == SYMBOL and t.value in ('+', '-', '.')):
                                     is_num = False
                             
                             if is_num:
-                                try:
-                                    float(s)
-                                    values.append(Literal(s, NUMBER))
-                                except ValueError:
-                                    values.append(Literal(s, STRING))
+                                if s.upper().startswith('&X') or s.upper().startswith('&B'):
+                                    values.append(Literal(s, 'BIN_NUMBER'))
+                                elif s.startswith('&'):
+                                    values.append(Literal(s, 'HEX_NUMBER'))
+                                else:
+                                    try:
+                                        float(s)
+                                        values.append(Literal(s, NUMBER))
+                                    except ValueError:
+                                        values.append(Literal(s, STRING))
                             else:
                                 values.append(Literal(s, STRING))
                     else:
