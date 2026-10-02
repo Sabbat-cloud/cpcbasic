@@ -459,6 +459,9 @@ class Display:
                         self.streams[stream]['paper'] = tmp
                     else:
                         tmp = self.current_pen; self.current_pen = self.current_paper; self.current_paper = tmp
+                elif char_code == 18: # Clear to End of Line
+                    if not self.tag_active:
+                        self._clear_to_end_of_line(win_cols, stream)
                 elif char_code == 31: # US (Locate)
                     self.esc_state = 31
                     self.esc_args = []
