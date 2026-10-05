@@ -1,0 +1,16 @@
+10 rem hexagono
+20 rem construye un hexadono a partide los datos de coordenadas de la sentencia data
+30 ink 0,0
+40 ink 1,12
+50 mode 1
+60 paper 0
+70 graphics pen 1:rem las lines 30 -70 definen los colores de dibujo
+80 read x1,y1
+90 for i=1 to 6
+100 x=x1:y=y1
+110 read x1,y1
+120 move x,y
+130 draw x1,y1
+140 next i
+150 end
+160 data 100,150,200,150,250,100,200,50,100,50,50,100,100,150

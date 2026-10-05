@@ -431,6 +431,17 @@ class SaveStatement(Statement):
         self.address = address
         self.length = length
         self.entry_point = entry_point
+class KeyStatement(Statement):
+    def __init__(self, key_num, string_expr):
+        self.key_num = key_num
+        self.string_expr = string_expr
+class KeyDefStatement(Statement):
+    def __init__(self, key_num, repeat, normal, shift, control):
+        self.key_num = key_num
+        self.repeat = repeat
+        self.normal = normal
+        self.shift = shift
+        self.control = control
 class LoadStatement(Statement):
     def __init__(self, filename, address=None):
         self.filename = filename
@@ -1152,6 +1163,26 @@ class Parser:
                         break
                 return SpeedStatement(type_, params)
                 
+            elif self.current_token.value == 'KEY':
+                self.eat(KEYWORD)
+                if self.current_token.type == KEYWORD and self.current_token.value == 'DEF':
+                    self.eat(KEYWORD)
+                    k_num = self.parse_expression()
+                    self.eat(SYMBOL)
+                    k_rep = self.parse_expression()
+                    self.eat(SYMBOL)
+                    k_norm = self.parse_expression()
+                    self.eat(SYMBOL)
+                    k_shift = self.parse_expression()
+                    self.eat(SYMBOL)
+                    k_ctrl = self.parse_expression()
+                    return KeyDefStatement(k_num, k_rep, k_norm, k_shift, k_ctrl)
+                else:
+                    k_num = self.parse_expression()
+                    self.eat(SYMBOL)
+                    k_str = self.parse_expression()
+                    return KeyStatement(k_num, k_str)
+                    
             elif self.current_token.value == 'MODE':
                 self.eat(KEYWORD)
                 expr = self.parse_expression()

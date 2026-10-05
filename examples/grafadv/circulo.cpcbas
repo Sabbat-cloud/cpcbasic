@@ -1,0 +1,19 @@
+10 rem programa circulo
+20 rem constrye un circulo a partir de coordenadas calculadas
+30 ink 0,0
+40 ink 1,12
+50 mode 1
+60 paper 0
+70 graphics pen 1: rem las lines 30 -70 definen los colores del dibujo
+80 input "Radio";r
+90 an=0
+100 ai=0.062831853
+110 x1=r*cos(an):y1=r*sin(an)
+120 for i=1 to 100
+130 x=x1:y=y1
+140 an=an+ai
+150 x1=r*cos(an):y1=r*sin(an)
+160 move x+320,y+200
+170 draw x1+320,y1+200
+180 next i
+190 end

@@ -1,0 +1,14 @@
+10 rem programa ahoraloves
+20 randomize
+30 cls
+40 x1=rnd(1)*640:rem define el primer valor de la x
+50 y1=rnd(1)*400:rem define el primer valor de la y
+60 x2=rnd(1)*640:rem define el segundo valor de la x
+70 y2=rnd(1)*400:rem define el segundo valor de la y
+80 move x1,y1
+90 draw x2,y2
+100 rem ahora borra la linea
+110 rem en el modo de inta 1(xor) se borrara la linea existente
+120 mvoe x1,y1,1,1
+130 draw x2,y2,1,1
+140 goto 40

@@ -1,0 +1,109 @@
+5 REM****PROGRAMA SKETCH****
+10 REM definicion del tamaño y los pasos del cursor
+20 cs=2:ss=2
+30 MODE 1
+40 INPUT"NOMBRE DEL FICHERO DE DATOS";n$
+45 CLS
+50 REM ajuste de contadores y banderas
+60 fl=0:npts=1:na=1
+70 lb=0:REM contador de lineas
+80 se=0:REM bandera indicadora de fin de segmento
+90 s1=0:REM contador de segmentos
+92 fi=0:REM bandera indicadora de fin de linea
+93 li=0:REM contador de linea del segmento
+94 jy=1:REM bandera de comienzo/fin de linea
+100 DIM xp(500),yp(500),ln(2,500),s(3,10):REM dimensionamiento de matrices
+120 REM colocacion del cursor en la posicion central
+130 x=320:y=200
+135       GOSUB 3500:REM colocacion de texto en pantalla
+140       GOSUB 180:REM rutina de dibujo del cursor
+150       GOSUB 230:REM rutina de movimiento del cursor
+160       GOSUB 340:REM rutina de barrido de la linea
+170 GOTO 140
+180 REM rutina de dibujo del cursor
+190 x1=x-cs:y1=y-cs:x2=x+cs:y2=y+cs
+200       MOVE x1,y
+205       DRAW x2,y,1,1
+210       MOVE x,y1
+215       DRAW x,y2,1,1
+220 RETURN
+230 REM rutina de movimiento del cursor
+240 y3=y:x3=x
+250       IF INKEY(0)=0 THEN y=y+ss:GOTO 310
+260       IF INKEY(2)=0 THEN y=y-ss:GOTO 310
+270       IF INKEY(8)=0 THEN x=x-ss:GOTO 310
+280       IF INKEY(1)=0 THEN x=x+ss:GOTO 310
+290       GOTO 310
+310       MOVE x3,y2
+320       DRAW x3,y1,1,1
+325       MOVE x1,y3
+326       DRAW x2,y3,1,1
+330 RETURN
+340 REM rutina de dibujo y barrido de la linea
+350 a$=INKEY$
+355 IF a$="" THEN IF fl=0 THEN RETURN
+370 IF (a$="Q" OR a$="q") AND jy=1 THEN jy=2:LOCATE 1,1:PRINT "S":GOSUB 3000:GOTO 430
+380 IF (a$="Q" OR a$="q") AND jy=2 THEN jy=1:LOCATE 1,1:PRINT "F":GOSUB 3000:GOTO 460
+390 IF a$="B" OR a$="b" THEN jy=1:GOTO 450:REM corte de la linea
+400 IF a$="E" OR a$="e" THEN se=1:jy=1:GOTO 460:REM fin de la figura
+410 IF fl=0 THEN RETURN
+420 GOTO 650:REM dibujo/borrado de la linea
+430 xi=x:yi=y:REM coordenadas de comienzo
+440 fl=1:RETURN
+450 fi=1:REM bandera de corte de linea
+460 xf=x:yf=y:REM entrada de un punto
+480       MOVE xi,yi
+485       DRAW xf,yf
+490 npts=npts+1:na=na+1:li=li+1:lb=lb+1:REM incrementar contadores
+500 xp(na)=xf:yp(na)=yf:REM entrada de puntos
+510 xp(na-1)=xi:yp(na-1)=yi:REM entrada de puntos
+560 ln(1,lb)=na-1:REM entrada de indices de lineas
+570 ln(2,lb)=na
+580 IF fi=1 THEN na=na+1:fi=0:REM incremento si la bandera de corte de linea activada
+590 IF se=1 THEN s1=s1+1:s(1,s1)=npts-li:s(2,s1)=npts-1:s(3,s1)=0:GOTO 690
+630 fl=0:RETURN
+640 fl=0
+650 REM Dibujo/borrado de la linea
+660       MOVE x,y
+665       DRAW xi,yi,1,1
+670       MOVE x,y
+675       DRAW xi,yi,1,1
+680 RETURN
+690 REM continuar
+710 FOR i=s(1,s1) TO s(2,s1)
+730       MOVE xp(ln(1,i)),yp(ln(1,i))
+735       DRAW xp(ln(2,i)),yp(ln(2,i)),1,0
+740 NEXT i
+750 k$=INKEY$:LOCATE 1,2:PRINT"otro segmento?"
+755 IF k$="" THEN 750 :REM hasta que no se pulse una tecla, vuelve a 750
+757 LOCATE 1,2:PRINT"              "
+770 IF k$="F" THEN 800:REM no, entonces termina
+780 li=0:fl=0:se=0:na=na+1:REM si, entonces actualiza los contadores
+790 RETURN
+800 REM ahora crea el fichero que contiene los datos
+810 OPENOUT n$
+840 WRITE #9,na
+850       FOR i=1 TO na
+860             WRITE #9,xp(i)
+870             WRITE #9,yp(i)
+875       NEXT i
+880 WRITE #9,lb
+890       FOR i=1 TO lb
+900             WRITE #9,ln(1,i)
+910             WRITE #9,ln(2,i)
+915       NEXT i
+920 WRITE #9,s1
+930       FOR i=1 TO s1
+940             WRITE #9,s(1,i)
+950             WRITE #9,s(2,i)
+960             WRITE #9,s(3,i)
+965       NEXT i
+970 CLOSEOUT
+980 END
+3000 FOR i=1 TO 200:NEXT i:RETURN
+3500 LOCATE 13,1:PRINT "PROGRAMA SKETCH";
+3510 LOCATE 1,24:PRINT"        Q=PRINC/FIN DE LINEA  B=CORTE DE LINEA"
+3520 LOCATE 1,25:PRINT"       F=FIN  S=SIG SEGMENTO  E=FIN DE SEGMENTO"
+3530 MOVE 0,50
+3540 DRAW 640,50
+3600 RETURN

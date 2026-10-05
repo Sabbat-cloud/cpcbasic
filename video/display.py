@@ -99,6 +99,7 @@ class Display:
         self.tag_active = False
 
         self.user_symbols = CPC_FONT.copy()
+        self.symbol_after_limit = 240
 
     def _update_palette(self, flash_state):
         palette = [(0,0,0)] * 256
@@ -109,7 +110,14 @@ class Display:
                 palette[i] = CPC_PALETTE[self.inks[i]]
         self.logical_surface.set_palette(palette)
 
+    def symbol_after(self, limit):
+        if 0 <= limit <= 256:
+            self.symbol_after_limit = limit
+            self.user_symbols = CPC_FONT.copy()
+
     def define_symbol(self, char_code, matrix):
+        if hasattr(self, 'symbol_after_limit') and char_code < self.symbol_after_limit:
+            return  # Ignorar si está por debajo del límite
         if 0 <= char_code <= 255 and len(matrix) == 8:
             self.user_symbols[char_code] = matrix
 

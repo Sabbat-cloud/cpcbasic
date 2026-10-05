@@ -16,7 +16,7 @@ from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, 
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnBreakStatement, OnSqStatement, CallStatement, ReleaseStatement, OutStatement, WaitStatement, CursorStatement, PlotrStatement, WidthStatement, WindowSwapStatement, SwapStatement, AutoStatement, CatStatement, ChainStatement, DeleteStatement, EditStatement, MemoryStatement, MergeStatement, RenumStatement, SaveStatement, LoadStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnBreakStatement, OnSqStatement, CallStatement, ReleaseStatement, OutStatement, WaitStatement, CursorStatement, PlotrStatement, WidthStatement, WindowSwapStatement, SwapStatement, AutoStatement, CatStatement, ChainStatement, DeleteStatement, EditStatement, MemoryStatement, MergeStatement, RenumStatement, SaveStatement, LoadStatement, KeyStatement, KeyDefStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -155,6 +155,9 @@ class Interpreter:
             "CINT": lambda x: int(self.cpc_round(x)),
             "ERR": lambda: self.err_code,
             "ERL": lambda: self.err_line,
+            "DERR": lambda: 0,
+            "FRE": lambda x=0: 40000,
+            "INP": lambda x=0: 0,
             "FIX": int,
             "ROUND": lambda x, d=0: self.cpc_round(x, d) if d > 0 else int(self.cpc_round(x, d)),
             "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
@@ -428,7 +431,7 @@ class Interpreter:
                         elif val_upper in self.builtins:
                             kw = val_upper
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL", "DERR", "FRE", "INP"):
                                 next_idx = i + 2 if skip_next else i + 1
                                 if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                     s += "()"
@@ -468,7 +471,7 @@ class Interpreter:
                         elif kw == 'XOR': s += ' ^ '
                         elif kw in self.builtins:
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP"):
                                 if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                     s += "()"
                         else: s += f' {kw} '
@@ -1410,18 +1413,38 @@ class Interpreter:
                         paper = int(self.evaluate(stmt.paper))
                         self.display.set_graphics_paper(paper)
 
+                    elif isinstance(stmt, KeyStatement):
+                        k_num = int(self.evaluate(stmt.key_num))
+                        k_str = str(self.evaluate(stmt.string_expr))
+                        # Macro expansion not physically rendered in this version
+                        
+                    elif isinstance(stmt, KeyDefStatement):
+                        k_num = int(self.evaluate(stmt.key_num))
+                        k_rep = int(self.evaluate(stmt.repeat))
+                        k_norm = int(self.evaluate(stmt.normal))
+                        k_shift = int(self.evaluate(stmt.shift))
+                        k_ctrl = int(self.evaluate(stmt.control))
+                        # Key definition not physically applied in this version
+
                     elif isinstance(stmt, SpeedStatement):
-                        if stmt.target == 'INK':
-                            if stmt.expr1 is not None:
-                                t1 = int(self.evaluate(stmt.expr1))
-                                t2 = int(self.evaluate(stmt.expr2)) if stmt.expr2 is not None else t1
+                        target = stmt.type
+                        expr1 = stmt.params[0] if len(stmt.params) > 0 else None
+                        expr2 = stmt.params[1] if len(stmt.params) > 1 else None
+                        
+                        if target == 'INK':
+                            if expr1 is not None:
+                                t1 = int(self.evaluate(expr1))
+                                t2 = int(self.evaluate(expr2)) if expr2 is not None else t1
                                 self.display.set_speed_ink(t1, t2)
-                        elif stmt.target == 'KEY':
-                            if stmt.expr1 is not None and stmt.expr2 is not None:
-                                t1 = int(self.evaluate(stmt.expr1))
-                                t2 = int(self.evaluate(stmt.expr2))
+                        elif target == 'KEY':
+                            if expr1 is not None and expr2 is not None:
+                                t1 = int(self.evaluate(expr1))
+                                t2 = int(self.evaluate(expr2))
                                 self.display.set_speed_key(t1, t2)
-                        # KEY speed is ignored for now
+                        elif target == 'WRITE':
+                            if expr1 is not None:
+                                t1 = int(self.evaluate(expr1))
+                                self.speed_write = t1
 
                     elif isinstance(stmt, EnvStatement):
                         env_no = int(self.evaluate(stmt.env_no))

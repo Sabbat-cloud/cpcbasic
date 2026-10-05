@@ -1,0 +1,15 @@
+10 rem programa espiral
+20 rem constrye una espiral a partir de coordenadas calculadas
+30 ink 0,0
+40 ink 1,12
+50 mode 1
+60 paper 0
+70 graphics pen 1: rem las lines 30 -70 definen los colores del dibujo
+80 input "Resolucion ejemplo (0.1)";re
+90 x1=320:y1=200
+100 for i=0 to 50 step re
+110 r=i*2:x=x1:y=y1
+120 x1=r*sin(i)+320:y1=r*cos(i)+200
+130 move x,y
+140 draw x1,y1
+150 next i
