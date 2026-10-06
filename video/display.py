@@ -677,8 +677,8 @@ class Display:
         elif self.mode == 1: width = 2
         else: width = 1
         
-        if self.line_mask == 255 and self.mask_first == 1 and self.graphics_write_mode == 0:
-            pygame.draw.line(self.logical_surface, pen, (start_x, start_y), (end_x, end_y), width)
+        if False:
+            pass
         else:
             dx_steps = abs(end_x - start_x) // width
             dy_steps = abs(end_y - start_y) // 2

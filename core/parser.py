@@ -316,7 +316,8 @@ class ClsStatement(Statement):
         self.stream = stream
 
 class ClgStatement(Statement):
-    pass
+    def __init__(self, color=None):
+        self.color = color
 
 class IfStatement(Statement):
     def __init__(self, condition, then_stmts, else_stmts=None):
@@ -1419,7 +1420,10 @@ class Parser:
 
             elif self.current_token.value == 'CLG':
                 self.eat(KEYWORD)
-                return ClgStatement()
+                color = None
+                if self.current_token.type not in (NEWLINE, EOF) and not (self.current_token.type == SYMBOL and self.current_token.value == ':'):
+                    color = self.parse_expression()
+                return ClgStatement(color)
 
             elif self.current_token.value == 'DI':
                 self.eat(KEYWORD)
@@ -1667,11 +1671,9 @@ class Parser:
             if paren_level == 0 and expecting_op and is_value_start:
                 break
             
-            # String literals are kept as Literal nodes directly to simplify
+            # String literals are kept as part of the expression to support concatenation like "A" + "B"
             if self.current_token.type == 'STRING' and not expr_tokens:
-                val = self.current_token.value
-                self.eat('STRING')
-                return Literal(val, 'STRING')
+                pass  # We used to early-return here, but that breaks string concatenations
                 
             tok = self.current_token
             # FN merging

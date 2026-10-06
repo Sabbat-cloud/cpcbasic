@@ -435,15 +435,17 @@ class Interpreter:
                                 next_idx = i + 2 if skip_next else i + 1
                                 if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                     s += "()"
-                        elif t.value in self.arrays and (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
-                            s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
-                        elif val_upper in self.user_functions:
+                        elif skip_next or val_upper in self.user_functions:
                             safe_fn = val_upper.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                             s += f"USER_FN_{safe_fn}"
                             # If called without parenthesis, add them
                             next_idx = i + 2 if skip_next else i + 1
                             if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                 s += "()"
+                        elif (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
+                            if t.value not in self.arrays:
+                                self.arrays[t.value] = {}
+                            s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
                         else:
                             s += f"GET_VAR({repr(t.value)})"
                     elif t.type == 'HEX_NUMBER':
@@ -518,7 +520,7 @@ class Interpreter:
                                 node.right = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.right], keywords=[])
                             return node
                             
-                    tree = ast.parse(s, mode='eval')
+                    tree = ast.parse(s.lstrip(), mode='eval')
                     tree = BitwiseTransformer().visit(tree)
                     ast.fix_missing_locations(tree)
                     code_obj = compile(tree, '<basic_expr>', 'eval')
@@ -780,10 +782,20 @@ class Interpreter:
                         self.display.locate(1, 1, stream)
 
                     elif isinstance(stmt, ClgStatement):
-                        if hasattr(self.display, 'clear_graphics_window'):
-                            self.display.clear_graphics_window()
+                        if stmt.color is not None:
+                            c = int(self.evaluate(stmt.color))
+                            old_paper = getattr(self.display, 'graphics_paper', 0)
+                            self.display.set_graphics_paper(c)
+                            if hasattr(self.display, 'clear_graphics_window'):
+                                self.display.clear_graphics_window()
+                            else:
+                                self.display.clear_graphics()
+                            self.display.set_graphics_paper(old_paper)
                         else:
-                            self.display.clear_graphics()
+                            if hasattr(self.display, 'clear_graphics_window'):
+                                self.display.clear_graphics_window()
+                            else:
+                                self.display.clear_graphics()
 
                     elif isinstance(stmt, BorderStatement):
                         col1 = int(self.evaluate(stmt.color1))

@@ -1,0 +1,43 @@
+10 fichero$="volcpant.srn"
+20 MODE 1:BORDER 0
+30 DIM color(2)
+40 FOR i=0 TO 2
+50 READ color(i): REM lee colores de lista DATA
+60 INK i,color(i)
+70 NEXT
+80 ON ERROR GOTO 430
+90 OPENIN "param.dat" ' comprueba si existe fichero
+100 CLOSEIN:ON ERROR GOTO 0
+110 IF numerror=32 AND DERR=146 THEN CLS
+120 CURSOR 1:PRINT "Quiere escribir sobre el fichero":PRINT "anterior? S/N";
+130 GOTO 150
+140 PRINT a$:PRINT "Fin del programa":END
+150 PRINT a$:CURSOR 0
+160 OPENOUT "param.dat"
+170 WRITE #9,fichero$,1: REM graba nombre de fichero y modo
+180 FOR i=0 TO 2
+190 WRITE #9,color(i): REM graba colores
+200 NEXT i
+210 CLOSEOUT
+220 CLS
+230 gp=1:GRAPHICS PEN gp:w=125
+240 x=-65:a=240:y=400:b=-150:GOSUB 400
+250 y=0:b=150:GOSUB 400
+260 x=575:a=-240:y=400:b=-150:GOSUB 400
+270 y=0:b=150:GOSUB 400
+280 gp=2:GRAPHICS PEN gp:w=40
+290 a=240:x=-40:y=400:b=-150:GOSUB 400
+300 x=0:y=0:b=150:GOSUB 400
+310 a=-240:x=640:y=0:b=150:GOSUB 400
+320 x=600:y=400:b=-150:GOSUB 400
+330 ORIGIN 0,0,256,380,0,400:CLG 1
+340 ORIGIN 0,0,0,640,150,250:CLG 1
+350 ORIGIN 0,0,280,352,0,400:CLG 2
+360 ORIGIN 0,0,0,640,168,230:CLG 2
+370 SAVE fichero$,b,&C000,&4000
+380 DATA 2,26,6
+390 END
+400 MOVE x,y:DRAWR a,b:DRAWR w,0:DRAWR -a,-b
+410 MOVE x+a/2+w/2,y+b/2:FILL gp
+420 RETURN
+430 numerror=ERR:RESUME NEXT
