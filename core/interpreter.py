@@ -612,14 +612,7 @@ class Interpreter:
             self.stmts_since_event += 1
             
             if is_real_speed:
-                self.stmts_this_frame += 1
-                if self.stmts_this_frame > statements_limit:
-                    current_t = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
-                    wait_time = 20 - (current_t - getattr(self, 'last_update', 0))
-                    if wait_time > 0 and 'pygame' in sys.modules:
-                        pygame.time.wait(wait_time)
-                    self.stmts_this_frame = 0
-                    self.stmts_since_event = 100 # force event check
+                pass # Throttling is now handled per-statement inside the execution loop
 
             if self.stmts_since_event >= 100:
                 current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
@@ -693,6 +686,26 @@ class Interpreter:
 
                     stmt = statements[stmt_idx]
                     stmt_idx += 1
+                    
+                    if is_real_speed:
+                        cost = 1
+                        s_type = type(stmt).__name__
+                        if s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement', 'ClsStatement', 'ClgStatement', 'FillStatement', 'SoundStatement'):
+                            cost = 12
+                        elif s_type in ('PrintStatement', 'WriteStatement'):
+                            cost = 4
+                        elif s_type == 'LocateStatement':
+                            cost = 2
+                        
+                        self.stmts_this_frame += cost
+                        if self.stmts_this_frame > statements_limit:
+                            current_t = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                            wait_time = 20 - (current_t - getattr(self, 'last_update', 0))
+                            if wait_time > 0 and 'pygame' in sys.modules:
+                                pygame.time.wait(wait_time)
+                            self.stmts_this_frame = 0
+                            self.stmts_since_event = 100
+                    
                     if isinstance(stmt, PrintStatement):
                         out = []
                         newline = True
