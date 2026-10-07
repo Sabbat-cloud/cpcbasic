@@ -1,0 +1,61 @@
+1 GOTO 200 ' Salto al programa principal
+10 ' --- RUTINA DE INTERSECCION INSTANTANEA ---
+15 mt=1E+10:hit%=0
+20 FOR s%=1 TO ns%
+25 vx=ox-sx(s%):vy=oy-sy(s%):vz=oz-sz(s%)
+30 bh=dx*vx+dy*vy+dz*vz
+35 dq=bh*bh-vx*vx-vy*vy-vz*vz+sr(s%) ' Simplificado, sin (parentesis)
+40 IF dq<=0 THEN 70
+45 sq=SQR(dq)
+50 t=-bh-sq:IF t>eps AND t<mt THEN mt=t:hit%=s%:GOTO 70
+60 t=-bh+sq:IF t>eps AND t<mt THEN mt=t:hit%=s%
+70 NEXT
+80 RETURN
+
+200 ' --- INICIO Y CARGA DE ESCENA ---
+210 MODE 0: BORDER 0
+220 INK 0,0:INK 1,6:INK 2,2:INK 3,18:INK 4,24:INK 5,3:INK 6,1:INK 7,9:INK 8,12
+230 LOCATE 1,1: INPUT "Escena (s1 a s4): ", scnf$
+240 IF scnf$="" THEN scnf$="s1"
+250 OPENIN scnf$+".scn"
+260 INPUT#9,lx,ly,lz
+270 INPUT#9,ns%
+280 DIM sx(ns%),sy(ns%),sz(ns%),sr(ns%),sc%(ns%),rs(ns%),irs(ns%)
+290 FOR i%=1 TO ns%: INPUT#9,sx(i%),sy(i%),sz(i%),sr(i%),sc%(i%)
+300 rs(i%)=SQR(sr(i%)): irs(i%)=1/rs(i%) ' Precalculamos la inversa del radio
+310 NEXT: CLOSEIN
+320 eps=0.015: st=TIME/300
+
+330 ' --- BUCLE PRINCIPAL (Scanlines) ---
+340 FOR y%=0 TO 399 STEP 2
+350 cdy=(y%-200)*0.0020833: cdysq=cdy*cdy+1
+360 FOR x%=0 TO 639 STEP 4
+370 ox=0:oy=0:oz=0 ' Origen camara
+380 cdx=(x%-320)*0.0020833
+390 inv_dl=1/SQR(cdx*cdx+cdysq)
+400 dx=cdx*inv_dl: dy=cdy*inv_dl: dz=inv_dl
+410 GOSUB 10 ' Lanza rayo principal
+420 IF hit%=0 THEN col%=0: GOTO 600 ' Fondo negro
+430 hit1%=hit%: mt1=mt
+440 px=mt1*dx: py=mt1*dy: pz=mt1*dz ' Optimizado: como el origen de camara es 0, no sumamos ox,oy,oz
+450 nx=(px-sx(hit1%))*irs(hit1%): ny=(py-sy(hit1%))*irs(hit1%): nz=(pz-sz(hit1%))*irs(hit1%)
+460 ldx=lx-px: ldy=ly-py: ldz=lz-pz
+470 llen=SQR(ldx*ldx+ldy*ldy+ldz*ldz): inv_llen=1/llen
+480 ndotl=(nx*ldx+ny*ldy+nz*ldz)*inv_llen
+490 IF ndotl<0 THEN ndotl=0
+500 ox=px+nx*eps: oy=py+ny*eps: oz=pz+nz*eps
+510 sdx=dx: sdy=dy: sdz=dz
+520 dx=ldx*inv_llen: dy=ldy*inv_llen: dz=ldz*inv_llen
+530 GOSUB 10 ' Lanza rayo de sombra
+540 IF hit%>0 AND mt<llen THEN ndotl=0
+550 IF ndotl<0.25 THEN col%=hit1%+4 ELSE col%=hit1%
+560 ndotd=sdx*nx+sdy*ny+sdz*nz
+570 dx=sdx-2*ndotd*nx: dy=sdy-2*ndotd*ny: dz=sdz-2*ndotd*nz
+580 GOSUB 10 ' Lanza rayo de reflejo
+590 IF hit%>0 AND (((x%\4)+(y%\2)) AND 1) THEN col%=hit%+4
+600 PLOT x%,y%,col%
+610 NEXT
+620 et=(TIME/300)-st: LOCATE 1,1: PEN 5: PRINT USING "#####,.##s";et
+630 NEXT
+640 LOCATE 1,2: PRINT "Pulsa una tecla..."
+650 WHILE INKEY$="": WEND: RUN 200 ' Limpia variables y vuelve a pedir escena

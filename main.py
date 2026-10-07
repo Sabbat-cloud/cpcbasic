@@ -57,21 +57,9 @@ if __name__ == '__main__':
                 print(f"Error: No se encontró el archivo {args.filename}")
                 sys.exit(1)
     else:
-        # Default code if no file provided
-        code = """
-10 MODE 1
-20 PAPER 0
-30 PEN 1
-40 LOCATE 15, 1
-50 PRINT "--- AMSTRAD CPC ---"
-60 FOR I=1 TO 5
-70 PEN I
-80 LOCATE 5, 5 + I
-90 PRINT "COLOR LOOP"
-100 NEXT I
-110 SOUND 1, 142, 50, 15
-"""
-        print("--- Usando código por defecto (pasa un fichero .cpcbas como argumento) ---")
+        parser.print_help()
+        print("\nPor favor, especifica el programa BASIC o DSK a ejecutar.")
+        sys.exit(0)
 
     if args.list:
         print("\n--- LISTADO DEL CÓDIGO ---")

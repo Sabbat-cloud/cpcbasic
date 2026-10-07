@@ -833,8 +833,10 @@ class Display:
         if not hasattr(self, 'extra_screens'):
             self.extra_screens = {}
         if num not in self.extra_screens:
-            self.extra_screens[num] = pygame.Surface((self.logical_width, self.logical_height))
-            self.extra_screens[num].fill(self.current_paper)
+            new_surface = pygame.Surface((self.logical_width, self.logical_height), depth=8)
+            new_surface.set_palette(self.logical_surface.get_palette())
+            new_surface.fill(self.current_paper)
+            self.extra_screens[num] = new_surface
         return self.extra_screens[num]
 
     def _set_screen(self, num, surface):
@@ -870,7 +872,8 @@ class Display:
             slice_h = max(1, self.logical_height // 64)
             y = section * slice_h
             rect = pygame.Rect(0, y, self.logical_width, slice_h)
-            tmp = pygame.Surface((self.logical_width, slice_h))
+            tmp = pygame.Surface((self.logical_width, slice_h), depth=8)
+            tmp.set_palette(self.logical_surface.get_palette())
             tmp.blit(surf1, (0, 0), rect)
             surf1.blit(surf2, (0, y), rect)
             surf2.blit(tmp, (0, y))

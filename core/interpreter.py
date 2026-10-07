@@ -1336,12 +1336,13 @@ class Interpreter:
                             self.bank_current_record = 0
                         elif stmt.command == 'BANKWRITE':
                             # |BANKWRITE, @<codigo>, <cadena> [, <registro>]
-                            args = [self.evaluate(p) for p in stmt.params]
-                            if len(args) >= 2:
-                                err_var = args[0] # Literal string from parse
-                                text = str(args[1])
-                                if len(args) >= 3:
-                                    self.bank_current_record = int(args[2])
+                            if len(stmt.params) >= 2:
+                                # First param should be the variable name, parsed as a literal string by parser for @vars
+                                p0 = stmt.params[0]
+                                err_var = p0.value if isinstance(p0, Literal) else p0.name if isinstance(p0, Variable) else str(self.evaluate(p0))
+                                text = str(self.evaluate(stmt.params[1]))
+                                if len(stmt.params) >= 3:
+                                    self.bank_current_record = int(self.evaluate(stmt.params[2]))
                             
                                 addr = self.bank_current_record * self.bank_record_length
                                 if addr + self.bank_record_length > len(self.bank_memory):
@@ -1352,34 +1353,46 @@ class Interpreter:
                                     self.variables[err_var] = self.bank_current_record
                                     self.bank_current_record += 1
                         elif stmt.command == 'BANKREAD':
-                            # |BANKREAD, @<codigo>, @<cadena> [, <registro>]
-                            args = [self.evaluate(p) for p in stmt.params]
-                            if len(args) >= 2:
-                                err_var = args[0]
-                                str_var = args[1]
-                                if len(args) >= 3:
-                                    self.bank_current_record = int(args[2])
+                            # |BANKREAD, @<codigo>, <cadena> [, <registro>]
+                            if len(stmt.params) >= 2:
+                                p0 = stmt.params[0]
+                                err_var = p0.value if isinstance(p0, Literal) else p0.name if isinstance(p0, Variable) else str(self.evaluate(p0))
                                 
-                                addr = self.bank_current_record * self.bank_record_length
-                                if addr + self.bank_record_length > len(self.bank_memory):
-                                    self.variables[err_var] = -1
-                                else:
-                                    chunk = self.bank_memory[addr:addr+self.bank_record_length].decode('ascii', 'ignore').rstrip('\x00')
-                                    self.variables[str_var] = chunk
-                                    self.variables[err_var] = self.bank_current_record
-                                    self.bank_current_record += 1
+                                p1 = stmt.params[1]
+                                str_var = p1.name if isinstance(p1, Variable) else p1.value if isinstance(p1, Literal) else None
+
+                                if str_var is not None:
+                                    if len(stmt.params) >= 3:
+                                        self.bank_current_record = int(self.evaluate(stmt.params[2]))
+                                    
+                                    addr = self.bank_current_record * self.bank_record_length
+                                    if addr + self.bank_record_length > len(self.bank_memory):
+                                        self.variables[err_var] = -1
+                                    else:
+                                        chunk = self.bank_memory[addr:addr+self.bank_record_length].decode('ascii', 'ignore')
+                                        
+                                        curr_val = self.variables.get(str_var, "")
+                                        curr_len = len(curr_val)
+                                        
+                                        new_val = chunk[:curr_len]
+                                        if len(new_val) < curr_len:
+                                            new_val += curr_val[len(new_val):]
+                                            
+                                        self.variables[str_var] = new_val
+                                        self.variables[err_var] = self.bank_current_record
+                                        self.bank_current_record += 1
                         elif stmt.command == 'BANKFIND':
                             # |BANKFIND, @<codigo>, <cadena> [, <reg_inicio> [, <reg_fin>]]
-                            args = [self.evaluate(p) for p in stmt.params]
-                            if len(args) >= 2:
-                                err_var = args[0]
-                                search = str(args[1])
+                            if len(stmt.params) >= 2:
+                                p0 = stmt.params[0]
+                                err_var = p0.value if isinstance(p0, Literal) else p0.name if isinstance(p0, Variable) else str(self.evaluate(p0))
+                                search = str(self.evaluate(stmt.params[1]))
                                 start_reg = self.bank_current_record
                                 end_reg = (65536 // self.bank_record_length) - 1
-                                if len(args) >= 3:
-                                    start_reg = int(args[2])
-                                if len(args) >= 4:
-                                    end_reg = int(args[3])
+                                if len(stmt.params) >= 3:
+                                    start_reg = int(self.evaluate(stmt.params[2]))
+                                if len(stmt.params) >= 4:
+                                    end_reg = int(self.evaluate(stmt.params[3]))
                                 
                                 found = False
                                 for r in range(start_reg, end_reg + 1):
@@ -1387,15 +1400,10 @@ class Interpreter:
                                     if addr + self.bank_record_length > len(self.bank_memory):
                                         break
                                     chunk = self.bank_memory[addr:addr+self.bank_record_length].decode('ascii', 'ignore')
-                                    # Manual says ? can be used as wildcard in search string!
-                                    # "La <cadena buscada> puede contener símbolos comodín, que en este caso son caracteres número 0, chr$(0). El número de caracteres que intervienen en las comparaciones es igual a la <longitud de registro> o a la longitud de la <cadena buscada>, el más corto de los dos."
-                                    # Actually, ? is chr$(63). But if the user uses chr$(0) or ? as comodín, we could just do a simple match. Let's do a basic find.
-                                    # Wait, the manual says "son caracteres número 0, chr$(0)" but the example says "puede escribir ? como simbolo comodin".
-                                    # Let's implement a simple wildcard match
                                     search_len = min(len(search), self.bank_record_length)
                                     match = True
                                     for i in range(search_len):
-                                        if search[i] != '\x00' and search[i] != '?' and i < len(chunk) and search[i] != chunk[i]:
+                                        if search[i] != '\x00' and i < len(chunk) and search[i] != chunk[i]:
                                             match = False
                                             break
                                     if match:
@@ -1405,6 +1413,11 @@ class Interpreter:
                                         break
                                 if not found:
                                     self.variables[err_var] = -3
+                                else:
+                                    # Wait, does bank_current_record get updated to the next record after BANKFIND?
+                                    # The manual says "Al concluir la operación, la variable r% contiene el número del registro en el que se ha encontrado la cadena"
+                                    # But wait, does it update current record pointer? Yes, it says it starts searching from current, maybe we update it to the found one.
+                                    pass
 
                     elif isinstance(stmt, InkStatement):
                         pen = int(self.evaluate(stmt.pen))

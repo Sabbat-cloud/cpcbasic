@@ -44,10 +44,29 @@ class EmulatorGUI:
 
     def setup_menu(self):
         menubar = tk.Menu(self.root)
+        
         file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Nuevo", command=self.new_file)
+        file_menu.add_command(label="Abrir Archivo...", command=self.open_file)
+        file_menu.add_command(label="Guardar Archivo Como...", command=self.save_as_file)
+        file_menu.add_separator()
         file_menu.add_command(label="Cargar DSK...", command=self.load_dsk)
+        file_menu.add_separator()
         file_menu.add_command(label="Salir", command=self.quit)
         menubar.add_cascade(label="Archivo", menu=file_menu)
+
+        run_menu = tk.Menu(menubar, tearoff=0)
+        self.speed_var = tk.StringVar(value='unlimited')
+        run_menu.add_radiobutton(label="Velocidad: Ilimitada", variable=self.speed_var, value='unlimited', command=self.update_speed)
+        run_menu.add_radiobutton(label="Velocidad: Real (CPC 6128)", variable=self.speed_var, value='real', command=self.update_speed)
+        menubar.add_cascade(label="Ejecutar", menu=run_menu)
+
+        tools_menu = tk.Menu(menubar, tearoff=0)
+        tools_menu.add_command(label="Paleta de Colores", command=self.show_colors)
+        tools_menu.add_command(label="Tabla ASCII", command=self.show_ascii)
+        tools_menu.add_command(label="Guía de Coordenadas", command=self.show_coords)
+        menubar.add_cascade(label="Herramientas", menu=tools_menu)
+        
         self.root.config(menu=menubar)
 
     def setup_ui(self):
@@ -99,9 +118,160 @@ class EmulatorGUI:
         
         self.editor_text = scrolledtext.ScrolledText(self.tab_editor, wrap=tk.WORD, font=("Courier", 12))
         self.editor_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        self.editor_text.bind("<KeyRelease>", self.highlight_syntax)
+        self.setup_tags()
         
         default_code = '''10 MODE 1\n20 PAPER 0\n30 PEN 1\n40 LOCATE 10, 10\n50 PRINT "HOLA DESDE EL EDITOR!"\n60 FOR I=1 TO 5\n70 PEN I\n80 PRINT "COLOR ", I\n90 NEXT I\n'''
         self.editor_text.insert(tk.END, default_code)
+        self.highlight_syntax()
+
+    def update_speed(self):
+        speed = self.speed_var.get()
+        self.interpreter.speed = speed
+
+    def new_file(self):
+        self.editor_text.delete(1.0, tk.END)
+        self.highlight_syntax()
+
+    def open_file(self):
+        filepath = filedialog.askopenfilename(filetypes=[("BASIC Files", "*.bas *.cpcbas"), ("All Files", "*.*")])
+        if filepath:
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    code = f.read()
+            except UnicodeDecodeError:
+                with open(filepath, "r", encoding="latin-1") as f:
+                    code = f.read()
+            self.editor_text.delete(1.0, tk.END)
+            self.editor_text.insert(tk.END, code)
+            self.highlight_syntax()
+            
+    def save_as_file(self):
+        filepath = filedialog.asksaveasfilename(defaultextension=".bas", filetypes=[("BASIC Files", "*.bas *.cpcbas"), ("All Files", "*.*")])
+        if filepath:
+            code = self.editor_text.get(1.0, tk.END)
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(code)
+
+    def show_colors(self):
+        win = tk.Toplevel(self.root)
+        win.title("Paleta de Colores CPC")
+        win.geometry("400x400")
+        text = scrolledtext.ScrolledText(win, font=("Courier", 10))
+        text.pack(fill=tk.BOTH, expand=True)
+        colors = """Colores Hardware Amstrad CPC:
+
+0  Negro             14 Naranja Pastel
+1  Azul              15 Naranja
+2  Azul Brillante    16 Rojo Rosa
+3  Rojo              17 Violeta Pastel
+4  Magenta           18 Verde Brillante
+5  Malva             19 Verde Mar Brill.
+6  Rojo Brillante    20 Cian Brillante
+7  Púrpura           21 Verde Lima
+8  Magenta Brillante 22 Verde Pastel
+9  Verde             23 Cian Pastel
+10 Cian              24 Amarillo Brill.
+11 Azul Cielo        25 Amarillo Pastel
+12 Amarillo          26 Blanco Brillante
+13 Blanco
+
+Nota: En Locomotive BASIC (INK, PAPER, PEN) 
+se usan los IDs lógicos. Por defecto, las
+tintas lógicas están mapeadas a colores 
+hardware.
+"""
+        text.insert(tk.END, colors)
+        text.config(state=tk.DISABLED)
+
+    def show_ascii(self):
+        win = tk.Toplevel(self.root)
+        win.title("Tabla ASCII")
+        win.geometry("300x500")
+        text = scrolledtext.ScrolledText(win, font=("Courier", 10))
+        text.pack(fill=tk.BOTH, expand=True)
+        ascii_table = """Tabla de caracteres (selección):
+  
+  Control:
+   7  BEL (Beep)
+   8  BS  (Backspace / Izquierda)
+   9  TAB (Avanza cursor)
+   10 LF  (Baja cursor)
+   11 VT  (Sube cursor)
+   12 FF  (Limpia ventana)
+   13 CR  (Cursor al principio)
+   24 CAN (Invierte tinta y fondo)
+  
+  ASCII Imprimible:
+   32 [Espacio]
+   33 !    34 "    35 #
+   36 $    37 %    38 &
+   39 '    40 (    41 )
+   42 *    43 +    44 ,
+   45 -    46 .    47 /
+   48 0 .. 57 9
+"""
+        text.insert(tk.END, ascii_table)
+        text.config(state=tk.DISABLED)
+
+    def show_coords(self):
+        win = tk.Toplevel(self.root)
+        win.title("Guía de Coordenadas Gráficas")
+        win.geometry("500x350")
+        text = scrolledtext.ScrolledText(win, font=("Courier", 10))
+        text.pack(fill=tk.BOTH, expand=True)
+        coords = """Sistema de Coordenadas Gráficas (CPC):
+  
+  Resolución virtual (todos los MODEs):
+    X: 0 a 640 (de izquierda a derecha)
+    Y: 0 a 400 (de abajo hacia arriba)
+  
+  ORIGEN por defecto (0, 0):
+    Esquina inferior izquierda.
+    * Ojo: En algunos ordenadores es la
+      superior izquierda, pero en el CPC
+      el eje Y sube hacia arriba.
+  
+  MODEs de Video:
+    MODE 0: 160x200 (16 colores)
+      El píxel es muy ancho. 
+      1 unidad X = 4 píxeles gráficos.
+  
+    MODE 1: 320x200 (4 colores)
+      El píxel es normal.
+      1 unidad X = 2 píxeles gráficos.
+"""
+        text.insert(tk.END, coords)
+        text.config(state=tk.DISABLED)
+
+    def setup_tags(self):
+        self.editor_text.tag_configure("keyword", foreground="blue")
+        self.editor_text.tag_configure("string", foreground="green")
+        self.editor_text.tag_configure("comment", foreground="gray")
+        self.editor_text.tag_configure("number", foreground="darkorange")
+
+    def highlight_syntax(self, event=None):
+        import re
+        for tag in ["keyword", "string", "comment", "number"]:
+            self.editor_text.tag_remove(tag, "1.0", tk.END)
+            
+        content = self.editor_text.get("1.0", tk.END)
+        
+        keywords = ["PRINT", "LOCATE", "MODE", "PAPER", "PEN", "FOR", "TO", "STEP", "NEXT", "IF", "THEN", "ELSE", "GOTO", "GOSUB", "RETURN", "DIM", "DATA", "READ", "RESTORE", "INK", "BORDER", "PLOT", "DRAW", "DRAWR", "MOVE", "MOVER", "DEFINT", "DEFREAL", "DEFSTR", "CALL", "ENV", "ENT", "SOUND", "ON", "STOP", "END", "CLS", "CLG", "WINDOW", "INPUT", "WHILE", "WEND", "FILL", "MASK", "GRAPHICS", "TAG", "TAGOFF", "ORIGIN", "DI", "EI", "REM", "CLEAR", "SYMBOL", "ABS", "ASC", "CHR\$", "CINT", "COS", "CREAL", "EXP", "FIX", "INT", "LEFT\$", "LEN", "LOG", "LOG10", "LOWER\$", "MID\$", "PI", "POS", "RIGHT\$", "RND", "SGN", "SIN", "SPACE\$", "SQ", "SQR", "STR\$", "STRING\$", "TAN", "TEST", "TESTR", "TIME", "UNT", "UPPER\$", "VAL", "VPOS", "XPOS", "YPOS", "INKEY", "INKEY\$", "JOY", "PEEK", "ROUND", "PAUSE"]
+        kw_pattern = r"\b(" + "|".join(keywords) + r")\b"
+        
+        patterns = {
+            "string": r'".*?"',
+            "comment": r"('.*|\bREM\b.*)",
+            "keyword": kw_pattern,
+            "number": r"\b\d+\b"
+        }
+        
+        for tag, pattern in patterns.items():
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                start = f"1.0 + {match.start()} chars"
+                end = f"1.0 + {match.end()} chars"
+                self.editor_text.tag_add(tag, start, end)
 
     def load_dsk(self):
         filepath = filedialog.askopenfilename(filetypes=[("DSK Images", "*.dsk")])

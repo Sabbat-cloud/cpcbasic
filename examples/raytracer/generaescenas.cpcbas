@@ -1,0 +1,38 @@
+10 REM --- GENERADOR DE ESCENAS ---
+20 PRINT "Generando s1.scn (Clasica)..."
+30 OPENOUT "s1.scn"
+40 WRITE#9, 4,6,2 : REM Luz (X, Y, Z)
+50 WRITE#9, 4 : REM Numero de esferas
+60 WRITE#9, 0,-1,4,1,1 : REM X,Y,Z, Radio^2, Color
+70 WRITE#9, 2,0,4,1,2
+80 WRITE#9, -2,0,4,1,3
+90 WRITE#9, 0,-5001,0,25000000,4 : REM Suelo gigante
+100 CLOSEOUT
+110 PRINT "Generando s2.scn (Planetas)..."
+120 OPENOUT "s2.scn"
+130 WRITE#9, 0,10,-5
+140 WRITE#9, 5
+150 WRITE#9, 0,3,10,16,2 : REM Gigante azul de fondo
+160 WRITE#9, -3,-1,5,2.25,1
+170 WRITE#9, 3,-1,5,2.25,3
+180 WRITE#9, 0,-2,3,0.25,4 : REM Lunita amarilla
+190 WRITE#9, 0,-5002,0,25000000,1
+200 CLOSEOUT
+210 PRINT "Generando s3.scn (Eclipse Alineado)..."
+220 OPENOUT "s3.scn"
+230 WRITE#9, -5,5,5
+240 WRITE#9, 4
+250 WRITE#9, 0,-1,3,1,2
+260 WRITE#9, 1.5,0,5,4,1
+270 WRITE#9, -1.5,0,7,9,3
+280 WRITE#9, 0,-5003,0,25000000,4
+290 CLOSEOUT
+300 PRINT "Generando s4.scn (Macro / Zoom)..."
+310 OPENOUT "s4.scn"
+320 WRITE#9, 2,2,0
+330 WRITE#9, 3
+340 WRITE#9, 0,0,2.5,2.25,1
+350 WRITE#9, 1,1,1.5,0.04,3 : REM Esfera diminuta muy cerca
+360 WRITE#9, 0,-5001,0,25000000,2
+370 CLOSEOUT
+380 PRINT "Escenas generadas. Ya puedes ejecutar el Render."
