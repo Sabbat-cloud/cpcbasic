@@ -122,7 +122,7 @@ class Interpreter:
 
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
-            "__builtins__": None,
+            "__builtins__": {},
             "SIN": lambda x: math.sin(math.radians(x) if self.angle_mode == 'DEG' else x),
             "COS": lambda x: math.cos(math.radians(x) if self.angle_mode == 'DEG' else x),
             "TAN": lambda x: math.tan(math.radians(x) if self.angle_mode == 'DEG' else x),
@@ -139,6 +139,7 @@ class Interpreter:
             "SQR": math.sqrt,
             "LOG": math.log,
             "LOG10": math.log10,
+            "HIMEM": lambda: 42597,
             "VAL": lambda x: float(x) if '.' in str(x) else int(x) if str(x).lstrip('-').isdigit() else 0,
             "RIGHT_STR": lambda s, n: s[-int(n):] if int(n) > 0 else "",
             "MID_STR": lambda s, start, n=None: s[int(start)-1:int(start)-1+int(n)] if n is not None else s[int(start)-1:],
@@ -431,7 +432,7 @@ class Interpreter:
                         elif val_upper in self.builtins:
                             kw = val_upper
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL", "DERR", "FRE", "INP"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL", "DERR", "FRE", "INP", "HIMEM"):
                                 next_idx = i + 2 if skip_next else i + 1
                                 if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                     s += "()"
@@ -473,7 +474,7 @@ class Interpreter:
                         elif kw == 'XOR': s += ' ^ '
                         elif kw in self.builtins:
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP", "HIMEM"):
                                 if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                     s += "()"
                         else: s += f' {kw} '
