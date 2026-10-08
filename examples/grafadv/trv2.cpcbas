@@ -1,0 +1,68 @@
+10 REM ****PROGRAMA TRANSFORMACION V2****
+20 REM programa que efectua una traslacion, cambio de escala y giro de una nave espacial
+30 DIM x(20),y(20),ln(2,30),a(4,4),p(3),po(3)
+40 REM captura de los datos para la figura
+50 READ npts
+60 FOR i=1 TO npts:z=3
+70 READ x(i),y(i)
+80 NEXT i
+90 READ li
+100 FOR i=1 TO li
+110 READ ln(1,i),ln(2,i)
+120 NEXT i
+130 REM datos de la nave espacial
+140 DATA 11,10,10,10,30,20,40,20,60,25,70,30,60,30,40,40,30,40,10,30,20,20,20
+150 DATA 11,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,1
+160 REM entrada de la informacion relativa a la transformacion
+170 CLS
+180 INPUT "traslacion, TX,TY";tx,ty
+190 INPUT "cuantia del cambio de escala EX,EY";sx,sy
+200 INPUT "rotacion en grados";an
+210 REM cambio a radianes del angulo de giro
+220 an=an*0.017455
+230 REM ahora realiza las transformaciones
+240 t1=-x(1):t2=-y(1):REM traslado al origen
+250 GOSUB 360:REM rutina de traslacion
+260 GOSUB 510:REM dibujo de la figura
+270 GOSUB 410:REM rutina de cambio de escala
+280 GOSUB 510:REM dibujo de la figura
+290 GOSUB 460:REM rutina de rotacion
+300 GOSUB 510:REM dibujo de la figura
+310 t1=tx:t2=ty
+320 GOSUB 360:REM rutnia de traslacion
+330 GOSUB 510:REM dibujo de la figura
+340 END
+360 REM rutina de traslacion
+365 a(1,1)=1:a(1,2)=0:a(1,3)=t1
+370 a(2,1)=0:a(2,2)=1:a(2,3)=t2
+375 a(3,1)=0:a(3,2)=0:a(3,3)=1
+380 RETURN
+410 REM rutina de cambio de escala
+420 a(1,1)=sx:a(1,2)=0:a(1,3)=0
+425 a(2,1)=0:a(2,2)=sy:a(2,3)=0
+430 a(3,1)=0:a(3,2)=0:a(3,3)=1
+440 RETURN
+460 REM rutina de rotacion
+465 a(1,1)=COS(an):a(1,2)=SIN(an):a(1,3)=0
+470 a(2,1)=-SIN(an):a(2,2)=COS(an):a(2,3)=0
+475 a(3,1)=0:a(3,2)=0:a(3,3)=1
+480 RETURN
+510 REM procesamiento de los puntos de la figura
+520 FOR i=1 TO npts
+525 p(1)=0:p(2)=0:p(3)=0
+530 po(1)=x(i):po(2)=y(i):po(3)=1
+540 FOR j=1 TO 3
+545 FOR k=1 TO 3
+550 p(j)=(a(j,k)*po(k))+p(j)
+555 NEXT k
+560 NEXT j
+565 x(i)=p(1)
+570 y(i)=p(2)
+575 NEXT i
+580 REM ahora dibuja la figura
+600 FOR i=1 TO li
+610 MOVE x(ln(1,i)),y(ln(1,i))
+620 DRAW x(ln(2,i)),y(ln(2,i))
+630 NEXT i
+640 FOR i=1 TO 1000:NEXT i
+650 RETURN

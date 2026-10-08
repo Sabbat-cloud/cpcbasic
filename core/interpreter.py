@@ -676,7 +676,11 @@ class Interpreter:
             if interrupt_triggered:
                 continue
                 
-            statements = list(self.program.lines.get(self.pc, []))
+            if hasattr(self, 'restore_statements'):
+                statements = self.restore_statements
+                del self.restore_statements
+            else:
+                statements = list(self.program.lines.get(self.pc, []))
             next_pc = self.get_next_line(self.pc)
             
             stmt_idx = getattr(self, 'next_stmt_idx', 0)
@@ -1038,7 +1042,7 @@ class Interpreter:
                     elif isinstance(stmt, GosubStatement):
                         target = int(self.evaluate(stmt.line_number))
                         if target in self.program.lines:
-                            self.gosub_stack.append((self.pc, stmt_idx, False))
+                            self.gosub_stack.append((self.pc, stmt_idx, False, statements))
                             next_pc = target
                             break
                         else:
@@ -1049,7 +1053,9 @@ class Interpreter:
                         if self.gosub_stack:
                             ret_val = self.gosub_stack.pop()
                             if isinstance(ret_val, tuple):
-                                if len(ret_val) == 3:
+                                if len(ret_val) == 4:
+                                    next_pc, self.next_stmt_idx, is_interrupt, self.restore_statements = ret_val
+                                elif len(ret_val) == 3:
                                     next_pc, self.next_stmt_idx, is_interrupt = ret_val
                                 else:
                                     next_pc, is_interrupt = ret_val
