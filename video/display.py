@@ -171,9 +171,9 @@ class Display:
 
     def poke_video_ram(self, addr, val):
         offset = addr - 0xC000
-        y_char = (offset // 80) % 25
+        y_char = (offset % 2048) // 80
         y_scan = (offset // 2048) % 8
-        x_byte = offset % 80
+        x_byte = (offset % 2048) % 80
         
         sy = (y_char * 8 + y_scan) * 2
         sx = x_byte * 8
@@ -188,8 +188,9 @@ class Display:
                 pygame.draw.rect(self.logical_surface, pen, rect)
         elif self.mode == 0:
             pw = 4
-            for i in range(2):
-                pen = (val >> (i * 4)) & 0xF
+            p0 = (((val >> 7) & 1) << 0) | (((val >> 3) & 1) << 1) | (((val >> 5) & 1) << 2) | (((val >> 1) & 1) << 3)
+            p1 = (((val >> 6) & 1) << 0) | (((val >> 2) & 1) << 1) | (((val >> 4) & 1) << 2) | (((val >> 0) & 1) << 3)
+            for i, pen in enumerate([p0, p1]):
                 rect = pygame.Rect(sx + i * pw, sy, pw, 2)
                 pygame.draw.rect(self.logical_surface, pen, rect)
         elif self.mode == 2:
@@ -203,9 +204,9 @@ class Display:
 
     def peek_video_ram(self, addr):
         offset = addr - 0xC000
-        y_char = (offset // 80) % 25
+        y_char = (offset % 2048) // 80
         y_scan = (offset // 2048) % 8
-        x_byte = offset % 80
+        x_byte = (offset % 2048) % 80
         
         sy = (y_char * 8 + y_scan) * 2
         sx = x_byte * 8
@@ -228,9 +229,16 @@ class Display:
                 byte_val |= (bit0 << (7 - i)) | (bit1 << (3 - i))
         elif self.mode == 0:
             pw = 4
-            for i in range(2):
-                pen = self.logical_surface.get_at_mapped((sx + i * pw, sy))
-                byte_val |= (pen & 0xF) << (i * 4)
+            p0 = self.logical_surface.get_at_mapped((sx, sy)) & 0xF
+            p1 = self.logical_surface.get_at_mapped((sx + pw, sy)) & 0xF
+            byte_val |= ((p0 >> 0) & 1) << 7
+            byte_val |= ((p1 >> 0) & 1) << 6
+            byte_val |= ((p0 >> 2) & 1) << 5
+            byte_val |= ((p1 >> 2) & 1) << 4
+            byte_val |= ((p0 >> 1) & 1) << 3
+            byte_val |= ((p1 >> 1) & 1) << 2
+            byte_val |= ((p0 >> 3) & 1) << 1
+            byte_val |= ((p1 >> 3) & 1) << 0
         elif self.mode == 2:
             pw = 1
             for i in range(8):
@@ -524,7 +532,8 @@ class Display:
                     is_transparent = self.transparent_text
 
                 if char_surface is not None:
-                    with pygame.PixelArray(self.logical_surface) as pxarray:
+                    pxarray = None
+                    if True:
                         for cy in range(char_height):
                             for cx in range(char_width):
                                 px_x = x + cx
@@ -539,15 +548,15 @@ class Display:
                                     
                                     if plot_pen is not None:
                                         if self.tag_active and self.graphics_write_mode != 0:
-                                            curr = pxarray[px_x, px_y]
+                                            curr = self.logical_surface.get_at_mapped((px_x, px_y))
                                             if self.graphics_write_mode == 1:
-                                                pxarray[px_x, px_y] = curr ^ plot_pen
+                                                pygame.draw.rect(self.logical_surface, curr ^ plot_pen, pygame.Rect(px_x, px_y, 1, 1))
                                             elif self.graphics_write_mode == 2:
                                                 pxarray[px_x, px_y] = curr & plot_pen
                                             elif self.graphics_write_mode == 3:
                                                 pxarray[px_x, px_y] = curr | plot_pen
                                         else:
-                                            pxarray[px_x, px_y] = plot_pen
+                                            pygame.draw.rect(self.logical_surface, plot_pen, pygame.Rect(px_x, px_y, 1, 1))
                 
                 if self.tag_active:
                     self.graphics_x += char_width

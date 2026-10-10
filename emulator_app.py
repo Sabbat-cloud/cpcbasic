@@ -55,6 +55,17 @@ class EmulatorGUI:
         file_menu.add_command(label="Salir", command=self.quit)
         menubar.add_cascade(label="Archivo", menu=file_menu)
 
+        edit_menu = tk.Menu(menubar, tearoff=0)
+        edit_menu.add_command(label="Deshacer", command=lambda: self.editor_text.event_generate("<<Undo>>"), accelerator="Ctrl+Z")
+        edit_menu.add_command(label="Rehacer", command=lambda: self.editor_text.event_generate("<<Redo>>"), accelerator="Ctrl+Y")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cortar", command=lambda: self.editor_text.event_generate("<<Cut>>"), accelerator="Ctrl+X")
+        edit_menu.add_command(label="Copiar", command=lambda: self.editor_text.event_generate("<<Copy>>"), accelerator="Ctrl+C")
+        edit_menu.add_command(label="Pegar", command=lambda: self.editor_text.event_generate("<<Paste>>"), accelerator="Ctrl+V")
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Seleccionar Todo", command=lambda: self.editor_text.tag_add("sel", "1.0", "end"), accelerator="Ctrl+A")
+        menubar.add_cascade(label="Editar", menu=edit_menu)
+
         run_menu = tk.Menu(menubar, tearoff=0)
         self.speed_var = tk.StringVar(value='unlimited')
         run_menu.add_radiobutton(label="Velocidad: Ilimitada", variable=self.speed_var, value='unlimited', command=self.update_speed)
@@ -116,9 +127,33 @@ class EmulatorGUI:
         ttk.Entry(toolbar, textvariable=self.save_filename, width=10).pack(side=tk.LEFT)
         ttk.Button(toolbar, text="💾 SAVE (al DSK)", command=self.save_editor_code).pack(side=tk.LEFT, padx=5)
         
-        self.editor_text = scrolledtext.ScrolledText(self.tab_editor, wrap=tk.WORD, font=("Courier", 12))
+        self.editor_text = scrolledtext.ScrolledText(self.tab_editor, wrap=tk.WORD, font=("Courier", 12), undo=True)
         self.editor_text.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
         self.editor_text.bind("<KeyRelease>", self.highlight_syntax)
+        
+        # Context menu
+        self.editor_context_menu = tk.Menu(self.editor_text, tearoff=0)
+        self.editor_context_menu.add_command(label="Deshacer", command=lambda: self.editor_text.event_generate("<<Undo>>"))
+        self.editor_context_menu.add_command(label="Rehacer", command=lambda: self.editor_text.event_generate("<<Redo>>"))
+        self.editor_context_menu.add_separator()
+        self.editor_context_menu.add_command(label="Cortar", command=lambda: self.editor_text.event_generate("<<Cut>>"))
+        self.editor_context_menu.add_command(label="Copiar", command=lambda: self.editor_text.event_generate("<<Copy>>"))
+        self.editor_context_menu.add_command(label="Pegar", command=lambda: self.editor_text.event_generate("<<Paste>>"))
+        self.editor_context_menu.add_separator()
+        self.editor_context_menu.add_command(label="Seleccionar Todo", command=lambda: self.editor_text.tag_add("sel", "1.0", "end"))
+        
+        def show_context_menu(event):
+            self.editor_context_menu.tk_popup(event.x_root, event.y_root)
+            
+        self.editor_text.bind("<Button-3>", show_context_menu)
+        
+        def select_all(event):
+            self.editor_text.tag_add("sel", "1.0", "end")
+            return "break"
+            
+        self.editor_text.bind("<Control-a>", select_all)
+        self.editor_text.bind("<Control-A>", select_all)
+        
         self.setup_tags()
         
         default_code = '''10 MODE 1\n20 PAPER 0\n30 PEN 1\n40 LOCATE 10, 10\n50 PRINT "HOLA DESDE EL EDITOR!"\n60 FOR I=1 TO 5\n70 PEN I\n80 PRINT "COLOR ", I\n90 NEXT I\n'''
