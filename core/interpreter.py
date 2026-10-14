@@ -1433,13 +1433,13 @@ class Interpreter:
                         self.display.set_ink(pen, color1, color2)
 
                     elif isinstance(stmt, PenStatement):
+                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        bg_mode = int(self.evaluate(stmt.bg_mode)) if getattr(stmt, 'bg_mode', None) is not None else None
                         if stmt.pen is not None:
                             pen = int(self.evaluate(stmt.pen))
-                            stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
-                            self.display.set_pen(pen, stream)
-                        if getattr(stmt, 'bg_mode', None) is not None:
-                            bg_mode = int(self.evaluate(stmt.bg_mode))
-                            self.display.set_bg_mode(bg_mode)
+                            self.display.set_pen(pen, stream, bg_mode)
+                        elif bg_mode is not None:
+                            self.display.set_bg_mode(bg_mode, stream)
 
                     elif isinstance(stmt, PaperStatement):
                         paper = int(self.evaluate(stmt.paper))

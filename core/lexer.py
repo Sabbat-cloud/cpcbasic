@@ -112,11 +112,15 @@ class Lexer:
                 elif kind == 'SYMBOL' and value == ':':
                     in_data = False
                 elif kind == 'IDENTIFIER':
-                    value = value.upper()
-                    if value in KEYWORDS:
-                        kind = 'KEYWORD'
-                        if value == 'DATA':
-                            in_data = True
+                    if in_data:
+                        # Inside DATA statements, unquoted strings preserve their casing
+                        pass
+                    else:
+                        value = value.upper()
+                        if value in KEYWORDS:
+                            kind = 'KEYWORD'
+                            if value == 'DATA':
+                                in_data = True
                 elif kind == 'STRING':
                     if value.endswith('"') and len(value) > 1:
                         value = value[1:-1]

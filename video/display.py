@@ -92,7 +92,7 @@ class Display:
         except Exception:
             self.font = pygame.font.SysFont('courier', 16, bold=True)
             
-        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
         self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
         
         self.key_buffer = []
@@ -130,7 +130,7 @@ class Display:
             self.flash_inks[15] = 11
             self.current_pen = 1
             self.current_paper = 0
-            self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
+            self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
             self._update_palette(False)
             self.logical_surface.fill(self.current_paper)
             self.update()
@@ -142,6 +142,7 @@ class Display:
                 self.flash_inks[pen] = color2
             else:
                 self.flash_inks[pen] = None
+            self._update_palette(False)
 
     def set_border(self, color, color2=None):
         if 0 <= color < 27:
@@ -151,10 +152,12 @@ class Display:
             else:
                 self.border_color2 = None
 
-    def set_pen(self, pen, stream=0):
+    def set_pen(self, pen, stream=0, bg_mode=None):
         if 0 <= pen < 16:
             self.current_pen = pen
             if hasattr(self, 'streams') and stream in self.streams: self.streams[stream]['pen'] = pen
+        if bg_mode is not None:
+            self.set_bg_mode(bg_mode, stream)
 
     def set_paper(self, paper, stream=0):
         if 0 <= paper < 16:
@@ -251,9 +254,15 @@ class Display:
         if mode in (0, 1, 2, 3):
             self.graphics_write_mode = mode
 
-    def set_bg_mode(self, mode):
+    def set_bg_mode(self, mode, stream=None):
         if mode in (0, 1):
             self.bg_mode = mode
+            if stream is not None and hasattr(self, 'streams') and stream in self.streams:
+                self.streams[stream]['transparent'] = (mode == 1)
+            elif stream is None and hasattr(self, 'streams'):
+                self.transparent_text = (mode == 1)
+                for s in self.streams.values():
+                    s['transparent'] = (mode == 1)
 
     def set_mask(self, mask):
         self.line_mask = mask & 255
@@ -266,9 +275,37 @@ class Display:
             return self.streams[stream]['text_window']
         return (1, self.get_max_cols(), 1, 25)
 
+    def scroll_window_up(self, stream=0):
+        left, right, top, bottom = self.get_text_window(stream)
+        win_cols = right - left + 1
+        win_rows = bottom - top + 1
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+
+        px = (left - 1) * char_width
+        py = (top - 1) * char_height
+        pw = win_cols * char_width
+        ph = win_rows * char_height
+
+        subsurface = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
+        subsurface.scroll(0, -char_height)
+
+        bottom_rect = pygame.Rect(px, py + ph - char_height, pw, char_height)
+        paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+        pygame.draw.rect(self.logical_surface, paper, bottom_rect)
+
+        for r in range(top - 1, bottom - 1):
+            for c in range(left - 1, right):
+                if 0 <= r < 24 and 0 <= c < 80:
+                    self.text_buffer[r][c] = self.text_buffer[r + 1][c]
+        for c in range(left - 1, right):
+            if 0 <= bottom - 1 < 25 and 0 <= c < 80:
+                self.text_buffer[bottom - 1][c] = ' '
+
     def set_window(self, left, right, top, bottom, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
         self.streams[stream]['text_window'] = (left, right, top, bottom)
         self.locate(1, 1, stream)
 
@@ -303,8 +340,8 @@ class Display:
         return ' '
         
     def locate(self, col, row, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
         self.streams[stream]['text_col'] = col
         self.streams[stream]['text_row'] = row
 
@@ -414,7 +451,7 @@ class Display:
                         self.set_pen(char_code % 16, stream)
                         self.esc_state = 0
                     elif self.esc_state == 22: # Transparent mode
-                        self.transparent_text = (char_code != 0)
+                        self.set_bg_mode(1 if char_code != 0 else 0, stream)
                         self.esc_state = 0
                     elif self.esc_state == 23: # Graphics Write Mode
                         self.set_graphics_write_mode(char_code % 4)
@@ -446,8 +483,10 @@ class Display:
                     if self.tag_active:
                         self.graphics_y -= char_height
                     else:
-                        self.streams[stream]["text_row"] += 1
-                        if self.streams[stream]["text_row"] > win_rows: self.streams[stream]["text_row"] = win_rows
+                        if self.streams[stream]["text_row"] < win_rows:
+                            self.streams[stream]["text_row"] += 1
+                        else:
+                            self.scroll_window_up(stream)
                 elif char_code == 11: # VT (Up)
                     if self.tag_active:
                         self.graphics_y += char_height
@@ -484,7 +523,14 @@ class Display:
                 # Rest of control codes ignored
                 continue
             else:
-                
+                if not self.tag_active:
+                    if self.streams[stream]["text_col"] > win_cols:
+                        self.streams[stream]["text_col"] = 1
+                        if self.streams[stream]["text_row"] < win_rows:
+                            self.streams[stream]["text_row"] += 1
+                        else:
+                            self.scroll_window_up(stream)
+
                 if self.tag_active:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
                     y -= char_height
@@ -529,34 +575,42 @@ class Display:
                 else:
                     active_pen = self.streams[stream]['pen'] if hasattr(self, 'streams') and stream in self.streams else self.current_pen
                     active_paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
-                    is_transparent = self.transparent_text
+                    is_transparent = self.streams[stream].get('transparent', self.transparent_text) if hasattr(self, 'streams') and stream in self.streams else self.transparent_text
 
                 if char_surface is not None:
-                    pxarray = None
-                    if True:
-                        for cy in range(char_height):
-                            for cx in range(char_width):
-                                px_x = x + cx
-                                px_y = y + cy
-                                if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
-                                    color = char_surface.get_at((cx, cy))
-                                    plot_pen = None
-                                    if color.r > 127:
-                                        plot_pen = active_pen
-                                    elif not is_transparent:
-                                        plot_pen = active_paper
-                                    
-                                    if plot_pen is not None:
-                                        if self.tag_active and self.graphics_write_mode != 0:
-                                            curr = self.logical_surface.get_at_mapped((px_x, px_y))
-                                            if self.graphics_write_mode == 1:
-                                                pygame.draw.rect(self.logical_surface, curr ^ plot_pen, pygame.Rect(px_x, px_y, 1, 1))
-                                            elif self.graphics_write_mode == 2:
-                                                pxarray[px_x, px_y] = curr & plot_pen
-                                            elif self.graphics_write_mode == 3:
-                                                pxarray[px_x, px_y] = curr | plot_pen
+                    old_clip = self.logical_surface.get_clip()
+                    if self.tag_active and hasattr(self, 'graphics_clip_rect'):
+                        self.logical_surface.set_clip(self.graphics_clip_rect)
+
+                    for cy in range(char_height):
+                        for cx in range(char_width):
+                            px_x = x + cx
+                            px_y = y + cy
+                            if 0 <= px_x < self.logical_width and 0 <= px_y < self.logical_height:
+                                color = char_surface.get_at((cx, cy))
+                                plot_pen = None
+                                if color.r > 127:
+                                    plot_pen = active_pen
+                                elif not is_transparent:
+                                    plot_pen = active_paper
+                                
+                                if plot_pen is not None:
+                                    if self.tag_active and self.graphics_write_mode != 0:
+                                        curr = self.logical_surface.get_at_mapped((px_x, px_y))
+                                        if self.graphics_write_mode == 1:
+                                            new_pen = curr ^ plot_pen
+                                        elif self.graphics_write_mode == 2:
+                                            new_pen = curr & plot_pen
+                                        elif self.graphics_write_mode == 3:
+                                            new_pen = curr | plot_pen
                                         else:
-                                            pygame.draw.rect(self.logical_surface, plot_pen, pygame.Rect(px_x, px_y, 1, 1))
+                                            new_pen = plot_pen
+                                        pygame.draw.rect(self.logical_surface, new_pen, pygame.Rect(px_x, px_y, 1, 1))
+                                    else:
+                                        pygame.draw.rect(self.logical_surface, plot_pen, pygame.Rect(px_x, px_y, 1, 1))
+
+                    if self.tag_active and hasattr(self, 'graphics_clip_rect'):
+                        self.logical_surface.set_clip(old_clip)
                 
                 if self.tag_active:
                     self.graphics_x += char_width
@@ -564,25 +618,6 @@ class Display:
                     if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
                         self.text_buffer[abs_row - 1][abs_col - 1] = char
                     self.streams[stream]["text_col"] += 1
-                
-            if self.streams[stream]["text_col"] > win_cols:
-                self.streams[stream]["text_col"] = 1
-                self.streams[stream]["text_row"] += 1
-                
-            if self.streams[stream]["text_row"] > win_rows:
-                px = (left - 1) * char_width
-                py = (top - 1) * char_height
-                pw = win_cols * char_width
-                ph = win_rows * char_height
-                
-                subsurface = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
-                subsurface.scroll(0, -char_height)
-                
-                bottom_rect = pygame.Rect(px, py + ph - char_height, pw, char_height)
-                paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
-                pygame.draw.rect(self.logical_surface, paper, bottom_rect)
-                
-                self.streams[stream]["text_row"] = win_rows
                 
     def _cpc_to_screen(self, x, y):
         screen_x = self.origin_x + x
