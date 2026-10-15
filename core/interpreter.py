@@ -375,6 +375,61 @@ class Interpreter:
             pass
         return None
 
+    def _find_matching_next(self, target_var, curr_pc, curr_statements, stmt_idx):
+        open_stack = [target_var]
+        
+        # 1. Search remaining statements on current line
+        for idx in range(stmt_idx, len(curr_statements)):
+            s = curr_statements[idx]
+            if isinstance(s, ForStatement):
+                open_stack.append(s.identifier)
+            elif isinstance(s, NextStatement):
+                ids = getattr(s, 'identifiers', [s.identifier])
+                if not ids or ids == [None]:
+                    if open_stack:
+                        open_stack.pop()
+                    if not open_stack:
+                        return (curr_pc, idx + 1)
+                else:
+                    for v in ids:
+                        if v in open_stack:
+                            while open_stack and open_stack[-1] != v:
+                                open_stack.pop()
+                            if open_stack:
+                                open_stack.pop()
+                            if not open_stack:
+                                return (curr_pc, idx + 1)
+
+        # 2. Search subsequent lines
+        try:
+            start_l_idx = self.line_numbers.index(curr_pc) + 1
+        except ValueError:
+            return None
+            
+        for l_idx in range(start_l_idx, len(self.line_numbers)):
+            pc = self.line_numbers[l_idx]
+            line_stmts = self.program.lines[pc]
+            for idx, s in enumerate(line_stmts):
+                if isinstance(s, ForStatement):
+                    open_stack.append(s.identifier)
+                elif isinstance(s, NextStatement):
+                    ids = getattr(s, 'identifiers', [s.identifier])
+                    if not ids or ids == [None]:
+                        if open_stack:
+                            open_stack.pop()
+                        if not open_stack:
+                            return (pc, idx + 1)
+                    else:
+                        for v in ids:
+                            if v in open_stack:
+                                while open_stack and open_stack[-1] != v:
+                                    open_stack.pop()
+                                if open_stack:
+                                    open_stack.pop()
+                                if not open_stack:
+                                    return (pc, idx + 1)
+        return None
+
     def trigger_error(self, code, line_num):
         self.err_code = code
         self.err_line = line_num
@@ -1570,10 +1625,27 @@ class Interpreter:
                         step_val = self.evaluate(stmt.step_expr)
                     
                         self.variables[stmt.identifier] = self.typecast(stmt.identifier, start_val)
-                        self.for_loops[stmt.identifier] = ((self.pc, stmt_idx), end_val, step_val)
-                        if stmt.identifier in self.for_stack:
-                            self.for_stack.remove(stmt.identifier)
-                        self.for_stack.append(stmt.identifier)
+                        if (step_val > 0 and start_val > end_val) or (step_val < 0 and start_val < end_val):
+                            if stmt.identifier in self.for_stack:
+                                self.for_stack.remove(stmt.identifier)
+                            self.for_loops.pop(stmt.identifier, None)
+                            next_pos = self._find_matching_next(stmt.identifier, self.pc, statements, stmt_idx)
+                            if next_pos:
+                                target_pc, target_idx = next_pos
+                                if target_pc == self.pc:
+                                    stmt_idx = target_idx
+                                else:
+                                    next_pc = target_pc
+                                    self.next_stmt_idx = target_idx
+                                    break
+                            else:
+                                self.trigger_error(26, self.pc)
+                                break
+                        else:
+                            self.for_loops[stmt.identifier] = ((self.pc, stmt_idx), end_val, step_val)
+                            if stmt.identifier in self.for_stack:
+                                self.for_stack.remove(stmt.identifier)
+                            self.for_stack.append(stmt.identifier)
                     
                     elif isinstance(stmt, ReadStatement):
                         for var in stmt.variables:
