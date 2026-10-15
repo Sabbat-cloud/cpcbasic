@@ -1,0 +1,7 @@
+10 MODE 1:PRINT "ESTO ES UN SCROLL DE HARDWARE INSTANTANEO"
+20 FOR i=1 TO 100
+30   reg12 = 48: REM Parte alta de &C000 (192 / 4)
+40   reg13 = i:  REM Desplazamiento horizontal
+50   OUT &BC00,12: OUT &BD00,reg12
+60   OUT &BC00,13: OUT &BD00,reg13
+70 NEXT i
