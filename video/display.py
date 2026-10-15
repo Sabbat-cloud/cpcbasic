@@ -51,6 +51,7 @@ class Display:
         self.logical_surface = pygame.Surface((self.logical_width, self.logical_height), depth=8)
         
         self.mode = 1
+        self.hardware_mode = 1
         
         self.border_color1 = 1
         self.border_color2 = None
@@ -124,6 +125,7 @@ class Display:
     def set_mode(self, mode):
         if mode in (0, 1, 2):
             self.mode = mode
+            self.hardware_mode = mode
             self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
             self.flash_inks = [None] * 16
             self.flash_inks[14] = 24
@@ -133,6 +135,11 @@ class Display:
             self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
             self._update_palette(False)
             self.logical_surface.fill(self.current_paper)
+            self.update()
+
+    def set_hardware_mode(self, hw_mode):
+        if hw_mode in (0, 1, 2):
+            self.hardware_mode = hw_mode
             self.update()
 
     def set_ink(self, pen, color, color2=None):
@@ -345,6 +352,44 @@ class Display:
         self.streams[stream]['text_col'] = col
         self.streams[stream]['text_row'] = row
 
+    @property
+    def text_col(self):
+        return self.get_pos(0)
+
+    @text_col.setter
+    def text_col(self, val):
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        self.streams[0]['text_col'] = val
+
+    @property
+    def text_row(self):
+        return self.get_vpos(0)
+
+    @text_row.setter
+    def text_row(self, val):
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        self.streams[0]['text_row'] = val
+
+    def get_pos(self, stream=0):
+        try:
+            s = int(stream)
+            if hasattr(self, 'streams') and s in self.streams:
+                return self.streams[s]['text_col']
+        except (ValueError, TypeError):
+            pass
+        return 1
+
+    def get_vpos(self, stream=0):
+        try:
+            s = int(stream)
+            if hasattr(self, 'streams') and s in self.streams:
+                return self.streams[s]['text_row']
+        except (ValueError, TypeError):
+            pass
+        return 1
+
     def get_max_cols(self):
         if self.mode == 0: return 20
         elif self.mode == 1: return 40
@@ -424,6 +469,9 @@ class Display:
         sub = self.logical_surface.subsurface(pygame.Rect(px, py, pw, char_height))
         sub.scroll(-char_width, 0)
         self._clear_area(win_cols, win_cols, self.streams[stream]["text_row"], self.streams[stream]["text_row"])
+
+    def print(self, text, stream=0):
+        return self.print_text(text, stream)
 
     def print_text(self, text, stream=0):
         max_cols = self.get_max_cols()
@@ -922,6 +970,82 @@ class Display:
             surf1.blit(surf2, (0, y), rect)
             surf2.blit(tmp, (0, y))
 
+    def get_rendered_surface(self):
+        hw_mode = getattr(self, 'hardware_mode', self.mode)
+        if hw_mode == self.mode:
+            return self.logical_surface
+
+        try:
+            import numpy as np
+            import pygame.surfarray
+            arr = pygame.surfarray.array2d(self.logical_surface)
+            w, h = self.logical_width, self.logical_height
+
+            if not hasattr(self, '_hw_surface') or self._hw_surface.get_size() != (w, h):
+                self._hw_surface = pygame.Surface((w, h), depth=8)
+                self._hw_array = np.zeros((w, h), dtype=np.uint8)
+
+            self._hw_surface.set_palette(self.logical_surface.get_palette())
+
+            if self.mode == 1 and hw_mode == 0:
+                p0 = arr[0::8, :] & 3
+                p1 = arr[2::8, :] & 3
+                p2 = arr[4::8, :] & 3
+                p3 = arr[6::8, :] & 3
+                m0 = p0 | (p2 << 2)
+                m1 = p1 | (p3 << 2)
+                for i in range(4):
+                    self._hw_array[i::8, :] = m0
+                    self._hw_array[i+4::8, :] = m1
+                pygame.surfarray.blit_array(self._hw_surface, self._hw_array)
+                return self._hw_surface
+
+            elif self.mode == 2 and hw_mode == 1:
+                b0 = arr[0::8, :] & 1
+                b1 = arr[1::8, :] & 1
+                b2 = arr[2::8, :] & 1
+                b3 = arr[3::8, :] & 1
+                b4 = arr[4::8, :] & 1
+                b5 = arr[5::8, :] & 1
+                b6 = arr[6::8, :] & 1
+                b7 = arr[7::8, :] & 1
+                n0 = b0 | (b4 << 1)
+                n1 = b1 | (b5 << 1)
+                n2 = b2 | (b6 << 1)
+                n3 = b3 | (b7 << 1)
+                self._hw_array[0::8, :] = n0
+                self._hw_array[1::8, :] = n0
+                self._hw_array[2::8, :] = n1
+                self._hw_array[3::8, :] = n1
+                self._hw_array[4::8, :] = n2
+                self._hw_array[5::8, :] = n2
+                self._hw_array[6::8, :] = n3
+                self._hw_array[7::8, :] = n3
+                pygame.surfarray.blit_array(self._hw_surface, self._hw_array)
+                return self._hw_surface
+
+            elif self.mode == 0 and hw_mode == 1:
+                m0 = arr[0::8, :] & 15
+                m1 = arr[4::8, :] & 15
+                p0 = (m0 & 1) | (((m0 >> 1) & 1) << 1)
+                p1 = (m1 & 1) | (((m1 >> 1) & 1) << 1)
+                p2 = ((m0 >> 2) & 1) | (((m0 >> 3) & 1) << 1)
+                p3 = ((m1 >> 2) & 1) | (((m1 >> 3) & 1) << 1)
+                self._hw_array[0::8, :] = p0 & 3
+                self._hw_array[1::8, :] = p0 & 3
+                self._hw_array[2::8, :] = p1 & 3
+                self._hw_array[3::8, :] = p1 & 3
+                self._hw_array[4::8, :] = p2 & 3
+                self._hw_array[5::8, :] = p2 & 3
+                self._hw_array[6::8, :] = p3 & 3
+                self._hw_array[7::8, :] = p3 & 3
+                pygame.surfarray.blit_array(self._hw_surface, self._hw_array)
+                return self._hw_surface
+        except Exception:
+            pass
+
+        return self.logical_surface
+
     def update(self):
         total_time = self.speed_ink_1 + self.speed_ink_2
         current_phase = pygame.time.get_ticks() % total_time
@@ -931,7 +1055,8 @@ class Display:
         active_border = self.border_color2 if flash_state and self.border_color2 is not None else self.border_color1
         self.screen.fill(CPC_PALETTE[active_border])
         
-        scaled_surface = pygame.transform.scale(self.logical_surface, (self.logical_width * self.scale, self.logical_height * self.scale))
+        source_surface = self.get_rendered_surface()
+        scaled_surface = pygame.transform.scale(source_surface, (self.logical_width * self.scale, self.logical_height * self.scale))
         self.screen.blit(scaled_surface, (self.border_size_logical * self.scale, self.border_size_logical * self.scale))
         pygame.display.flip()
 

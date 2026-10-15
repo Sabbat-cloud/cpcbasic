@@ -529,10 +529,14 @@ class Parser:
         return Program(lines)
 
     def parse_statement(self):
-        if self.current_token.type == KEYWORD:
-            if self.current_token.value in ('PRINT', 'WRITE'):
-                is_write = (self.current_token.value == 'WRITE')
-                self.eat(KEYWORD)
+        if self.current_token.type == KEYWORD or (self.current_token.type == SYMBOL and self.current_token.value == '?'):
+            if (self.current_token.type == KEYWORD and self.current_token.value in ('PRINT', 'WRITE')) or \
+               (self.current_token.type == SYMBOL and self.current_token.value == '?'):
+                is_write = (self.current_token.type == KEYWORD and self.current_token.value == 'WRITE')
+                if self.current_token.type == KEYWORD:
+                    self.eat(KEYWORD)
+                else:
+                    self.eat(SYMBOL)
                 stream = None
                 if self.current_token.type == SYMBOL and self.current_token.value == '#':
                     self.eat(SYMBOL)

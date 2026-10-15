@@ -91,6 +91,7 @@ class Interpreter:
             0xBCAA: self.fw_sound_queue,
             0xBCA7: self.fw_sound_check,
             0xBD19: self.fw_mc_wait_flyback,
+            0xBD1C: self.fw_mc_set_mode,
             0xBC14: self.fw_scr_clear
         }
         
@@ -114,6 +115,7 @@ class Interpreter:
         
         # Virtual 64KB RAM for PEEK/POKE
         self.ram = bytearray(65536)
+        self.init_font_ram()
         
         # Bank RAM for RSX
         self.bank_record_length = 255
@@ -131,9 +133,10 @@ class Interpreter:
             "RND": self.cpc_rnd,
             "PI": math.pi,
             "TIME": lambda: int(pygame.time.get_ticks() / 3.33) if 'pygame' in sys.modules else 0,
-            "XPOS": lambda: self.display.graphics_x,
-            "YPOS": lambda: self.display.graphics_y,
-            "VPOS": lambda: self.display.text_row,
+            "XPOS": lambda *args: self.display.graphics_x,
+            "YPOS": lambda *args: self.display.graphics_y,
+            "POS": lambda stream=0: self.display.get_pos(stream) if hasattr(self.display, 'get_pos') else (self.display.streams[int(stream)]['text_col'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
+            "VPOS": lambda stream=0: self.display.get_vpos(stream) if hasattr(self.display, 'get_vpos') else (self.display.streams[int(stream)]['text_row'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
             "CHR_STR": cpc_chr,
             "ASC": cpc_asc,
             "SQR": math.sqrt,
@@ -213,6 +216,15 @@ class Interpreter:
             return 0
         except:
             return -1
+
+    def init_font_ram(self):
+        from video.font_rom import CPC_FONT
+        for c in range(256):
+            matrix = CPC_FONT.get(c, [0]*8)
+            for idx, b in enumerate(matrix):
+                ram_addr = 42597 + c * 8 + idx
+                if ram_addr < len(self.ram):
+                    self.ram[ram_addr] = b
 
     def do_peek(self, addr):
         addr = int(addr) & 0xFFFF
@@ -331,6 +343,10 @@ class Interpreter:
         self.display.update()
         self.last_flyback = pygame.time.get_ticks()
 
+    def fw_mc_set_mode(self):
+        mode = getattr(self.z80, 'A', 0)
+        self.display.set_hardware_mode(mode)
+
     def get_joy_state(self, joy_id):
         keys = pygame.key.get_pressed()
         state = 0
@@ -432,7 +448,7 @@ class Interpreter:
                         elif val_upper in self.builtins:
                             kw = val_upper
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "ERR", "ERL", "DERR", "FRE", "INP", "HIMEM"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "POS", "INKEY", "ERR", "ERL", "DERR", "FRE", "INP", "HIMEM"):
                                 next_idx = i + 2 if skip_next else i + 1
                                 if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                     s += "()"
@@ -474,7 +490,7 @@ class Interpreter:
                         elif kw == 'XOR': s += ' ^ '
                         elif kw in self.builtins:
                             s += kw
-                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP", "HIMEM"):
+                            if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "POS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP", "HIMEM"):
                                 if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                     s += "()"
                         else: s += f' {kw} '
@@ -712,15 +728,23 @@ class Interpreter:
                             self.stmts_since_event = 100
                     
                     if isinstance(stmt, PrintStatement):
+                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        target_stream = 0 if stream == 8 else stream
                         out = []
                         newline = True
                         current_using_fmt = None
                         current_vals_for_using = []
-                    
+
+                        def print_chunk(chunk):
+                            if stream != 9 and hasattr(self, 'display'):
+                                self.display.print_text(chunk, target_stream)
+
                         def flush_using():
                             if current_using_fmt is not None and current_vals_for_using:
                                 fmt = str(self.evaluate(current_using_fmt))
-                                out.append(format_cpc_using(current_vals_for_using, fmt))
+                                formatted = format_cpc_using(current_vals_for_using, fmt)
+                                out.append(formatted)
+                                print_chunk(formatted)
                                 current_vals_for_using.clear()
 
                         for expr in stmt.expressions:
@@ -734,6 +758,7 @@ class Interpreter:
                                 elif expr.value == ',':
                                     flush_using()
                                     out.append('\t')
+                                    print_chunk('\t')
                                     newline = False
                             else:
                                 evaluated = self.evaluate(expr)
@@ -747,26 +772,29 @@ class Interpreter:
                                     if isinstance(evaluated, (int, float)) and evaluated >= 0:
                                         val = " " + val
                                     out.append(val)
+                                    print_chunk(val)
                                 newline = True
-                            
+
                         flush_using()
+                        if newline:
+                            print_chunk("\r\n")
+
                         out_str = "".join(out)
-                        
+
                         # Print to terminal for logging
                         try:
-                            print(out_str)
+                            if newline:
+                                print(out_str)
+                            else:
+                                print(out_str, end="", flush=True)
                         except UnicodeEncodeError:
-                            print(out_str.encode('ascii', 'replace').decode('ascii'))
-                        
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                            if newline:
+                                print(out_str.encode('ascii', 'replace').decode('ascii'))
+                            else:
+                                print(out_str.encode('ascii', 'replace').decode('ascii'), end="", flush=True)
+
                         if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
                             self.file_out[9].write(out_str + ("\n" if newline else ""))
-                        else:
-                            # Print to CPC graphical screen
-                            if getattr(stmt, 'stream', None) is not None and getattr(stmt, 'stream', None) == 8:
-                                self.display.print_text(out_str + ("\r\n" if newline else ""), 0)
-                            else:
-                                self.display.print_text(out_str + ("\r\n" if newline else ""), stream)
 
                     elif isinstance(stmt, WriteStatement):
                         out = []
@@ -1018,13 +1046,28 @@ class Interpreter:
                     
                     elif isinstance(stmt, CallStatement):
                         addr = self.evaluate(stmt.address)
-                        if isinstance(addr, str) and addr.startswith('0x'):
-                            addr = int(addr, 16)
-                        elif isinstance(addr, str) and addr.upper().startswith('&BB'):
-                            addr = int(addr[1:], 16)
+                        if isinstance(addr, str):
+                            if addr.startswith('0x') or addr.startswith('0X'):
+                                addr = int(addr, 16)
+                            elif addr.startswith('&'):
+                                val = addr[1:].upper()
+                                if val.startswith('H'): val = val[1:]
+                                addr = int(val, 16)
+                            else:
+                                try: addr = int(addr)
+                                except: addr = 0
                         else:
                             try: addr = int(addr)
                             except: addr = 0
+
+                        if stmt.params:
+                            try:
+                                self.z80.A = int(self.evaluate(stmt.params[0]))
+                            except Exception:
+                                self.z80.A = len(stmt.params)
+                        else:
+                            self.z80.A = 0
+
                         if addr in self.firmware_hooks:
                             self.firmware_hooks[addr]()
                         else:
@@ -1190,7 +1233,6 @@ class Interpreter:
                     elif isinstance(stmt, MemoryStatement):
                         addr = int(self.evaluate(stmt.address))
                         self.builtins["HIMEM"] = lambda: addr
-                        self.display.print(f"Memory bounds set to {addr}\r\n")
 
                     elif isinstance(stmt, MergeStatement):
                         filename = str(self.evaluate(stmt.filename))
@@ -1698,6 +1740,7 @@ class Interpreter:
                         limit = int(self.evaluate(stmt.limit))
                         if hasattr(self, 'display') and hasattr(self.display, 'symbol_after'):
                             self.display.symbol_after(limit)
+                        self.init_font_ram()
 
                     elif isinstance(stmt, SymbolStatement):
                         char_code = int(self.evaluate(stmt.char_code))
@@ -1707,6 +1750,10 @@ class Interpreter:
                         matrix = matrix[:8]
                         if hasattr(self.display, 'define_symbol'):
                             self.display.define_symbol(char_code, matrix)
+                        for idx, b in enumerate(matrix):
+                            ram_addr = 42597 + char_code * 8 + idx
+                            if ram_addr < len(self.ram):
+                                self.ram[ram_addr] = b
 
                     elif isinstance(stmt, WindowStatement):
                         left = int(self.evaluate(stmt.left))

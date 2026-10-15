@@ -111,6 +111,10 @@ class Lexer:
                         break
                 elif kind == 'SYMBOL' and value == ':':
                     in_data = False
+                elif kind == 'SYMBOL' and value == '?':
+                    if not in_data:
+                        kind = 'KEYWORD'
+                        value = 'PRINT'
                 elif kind == 'IDENTIFIER':
                     if in_data:
                         # Inside DATA statements, unquoted strings preserve their casing
