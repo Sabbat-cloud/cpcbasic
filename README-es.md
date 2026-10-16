@@ -60,7 +60,7 @@ Desde aquí podrás escribir tu código, ejecutarlo al instante con un botón (y
 También puedes ejecutar el emulador en modo 'standalone' (independiente) pasándole un archivo BASIC (.cpcbas) o una imagen de disco (`.dsk`). La ventana de ejecución gráfica permanecerá abierta cuando termine el programa para que puedas examinar la salida final. Por defecto, la ventana se escala al doble (x2), pero puedes cambiarlo con `--scale`. También puedes controlar la velocidad de ejecución con el parámetro `--speed` (utiliza `real` para simular el hardware original o `unlimited` para máxima velocidad).
 
 ```bash
-python main.py examples/matrix.cpcbas --scale 3 --speed real
+python main.py examples/matrix.cpcbas --scale 1 --speed real
 ```
 
 También puedes ejecutar imágenes `.dsk` directamente:

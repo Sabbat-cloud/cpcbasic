@@ -452,8 +452,10 @@ class WaitStatement(Statement):
         self.mask = mask
         self.invert = invert
 class CursorStatement(Statement):
-    def __init__(self, switch):
+    def __init__(self, switch=None, switch2=None, stream=None):
         self.switch = switch
+        self.switch2 = switch2
+        self.stream = stream
 class PlotrStatement(Statement):
     def __init__(self, x, y, pen=None):
         self.x = x
@@ -988,8 +990,23 @@ class Parser:
                 
             elif self.current_token.value == 'CURSOR':
                 self.eat(KEYWORD)
-                switch = self.parse_expression()
-                return CursorStatement(switch)
+                stream = None
+                if self.current_token.type == SYMBOL and self.current_token.value == '#':
+                    self.eat(SYMBOL)
+                    stream = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                switch = None
+                switch2 = None
+                if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                    self.eat(SYMBOL)
+                    switch2 = self.parse_expression()
+                else:
+                    switch = self.parse_expression()
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        switch2 = self.parse_expression()
+                return CursorStatement(switch, switch2, stream)
                 
             elif self.current_token.value == 'PLOTR':
                 self.eat(KEYWORD)

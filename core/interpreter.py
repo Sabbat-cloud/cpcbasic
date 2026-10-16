@@ -84,6 +84,10 @@ class Interpreter:
             0xBB06: self.fw_km_wait_char,
             0xBB75: self.fw_txt_set_cursor,
             0xBB78: self.fw_txt_get_cursor,
+            0xBB7B: lambda: self.display.set_cursor(None, 1) if hasattr(self.display, 'set_cursor') else None,
+            0xBB7E: lambda: self.display.set_cursor(None, 0) if hasattr(self.display, 'set_cursor') else None,
+            0xBB81: lambda: self.display.set_cursor(1, None) if hasattr(self.display, 'set_cursor') else None,
+            0xBB84: lambda: self.display.set_cursor(0, None) if hasattr(self.display, 'set_cursor') else None,
             0xBB90: self.fw_txt_set_pen,
             0xBB96: self.fw_txt_set_paper,
             0xBBC0: self.fw_gra_move_absolute,
@@ -889,8 +893,11 @@ class Interpreter:
                                         val = str(int(evaluated))
                                     else:
                                         val = str(evaluated)
-                                    if isinstance(evaluated, (int, float)) and evaluated >= 0:
-                                        val = " " + val
+                                    if isinstance(evaluated, (int, float)):
+                                        if evaluated >= 0:
+                                            val = " " + val + " "
+                                        else:
+                                            val = val + " "
                                     out.append(val)
                                     print_chunk(val)
                                 newline = True
@@ -1284,10 +1291,11 @@ class Interpreter:
                         # stub wait
 
                     elif isinstance(stmt, CursorStatement):
-                        s1 = int(self.evaluate(stmt.switch))
-                        s2 = int(self.evaluate(stmt.switch2)) if getattr(stmt, 'switch2', None) is not None else None
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        s1 = self.cint(self.evaluate(stmt.switch)) if getattr(stmt, 'switch', None) is not None else None
+                        s2 = self.cint(self.evaluate(stmt.switch2)) if getattr(stmt, 'switch2', None) is not None else None
                         if hasattr(self.display, 'set_cursor'):
-                            self.display.set_cursor(s1, s2)
+                            self.display.set_cursor(s1, s2, stream)
 
                     elif isinstance(stmt, PlotrStatement):
                         x = int(self.evaluate(stmt.x))

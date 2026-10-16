@@ -93,7 +93,7 @@ class Display:
         except Exception:
             self.font = pygame.font.SysFont('courier', 16, bold=True)
             
-        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
         self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
         
         self.key_buffer = []
@@ -135,7 +135,7 @@ class Display:
         self.current_paper = 0
         self.graphics_pen = 1
         self.graphics_paper = 0
-        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
         self.user_symbols = CPC_FONT.copy()
         self.symbol_after_limit = 240
         self.set_mode(1)
@@ -173,7 +173,9 @@ class Display:
                     'text_window': None,
                     'paper': paper,
                     'pen': pen,
-                    'transparent': False
+                    'transparent': False,
+                    'cursor_sys': 0,
+                    'cursor_user': 1
                 }
             self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
             self._update_palette(False)
@@ -354,11 +356,47 @@ class Display:
             if 0 <= bottom - 1 < 25 and 0 <= c < 80:
                 self.text_buffer[bottom - 1][c] = ' '
 
+    def scroll_window_down(self, stream=0):
+        left, right, top, bottom = self.get_text_window(stream)
+        win_cols = right - left + 1
+        win_rows = bottom - top + 1
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+
+        px = (left - 1) * char_width
+        py = (top - 1) * char_height
+        pw = win_cols * char_width
+        ph = win_rows * char_height
+
+        subsurface = self.logical_surface.subsurface(pygame.Rect(px, py, pw, ph))
+        subsurface.scroll(0, char_height)
+
+        top_rect = pygame.Rect(px, py, pw, char_height)
+        paper = self.streams[stream]['paper'] if hasattr(self, 'streams') and stream in self.streams else self.current_paper
+        pygame.draw.rect(self.logical_surface, paper, top_rect)
+
+        for r in range(bottom - 1, top - 1, -1):
+            for c in range(left - 1, right):
+                if 0 <= r < 25 and 0 <= c < 80:
+                    self.text_buffer[r][c] = self.text_buffer[r - 1][c]
+        for c in range(left - 1, right):
+            if 0 <= top - 1 < 25 and 0 <= c < 80:
+                self.text_buffer[top - 1][c] = ' '
+
     def set_window(self, left, right, top, bottom, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
         self.streams[stream]['text_window'] = (left, right, top, bottom)
         self.locate(1, 1, stream)
+
+    def set_cursor(self, system_switch=None, user_switch=None, stream=0):
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
+        if system_switch is not None:
+            self.streams[stream]['cursor_sys'] = 1 if system_switch != 0 else 0
+        if user_switch is not None:
+            self.streams[stream]['cursor_user'] = 1 if user_switch != 0 else 0
 
     def clear_graphics(self, stream=0):
         left, right, top, bottom = self.get_text_window(stream)
@@ -380,7 +418,7 @@ class Display:
                 if 0 <= r < 25 and 0 <= c < 80:
                     self.text_buffer[r][c] = ' '
                     
-        self.locate(1, 1)
+        self.locate(1, 1, stream)
 
     def copychr(self, stream=0):
         left, right, top, bottom = self.get_text_window(stream)
@@ -391,8 +429,8 @@ class Display:
         return ' '
         
     def locate(self, col, row, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
         self.streams[stream]['text_col'] = col
         self.streams[stream]['text_row'] = row
 
@@ -565,12 +603,24 @@ class Display:
                     if self.tag_active:
                         self.graphics_x -= char_width
                     else:
-                        self.streams[stream]["text_col"] = max(1, self.streams[stream]["text_col"] - 1)
+                        self.streams[stream]["text_col"] -= 1
+                        if self.streams[stream]["text_col"] < 1:
+                            self.streams[stream]["text_col"] = win_cols
+                            if self.streams[stream]["text_row"] > 1:
+                                self.streams[stream]["text_row"] -= 1
+                            else:
+                                self.scroll_window_down(stream)
                 elif char_code == 9: # TAB (Right)
                     if self.tag_active:
                         self.graphics_x += char_width
                     else:
-                        self.streams[stream]["text_col"] = min(win_cols, self.streams[stream]["text_col"] + 1)
+                        self.streams[stream]["text_col"] += 1
+                        if self.streams[stream]["text_col"] > win_cols:
+                            self.streams[stream]["text_col"] = 1
+                            if self.streams[stream]["text_row"] < win_rows:
+                                self.streams[stream]["text_row"] += 1
+                            else:
+                                self.scroll_window_up(stream)
                 elif char_code == 10: # LF (Down)
                     if self.tag_active:
                         self.graphics_y -= char_height
@@ -583,7 +633,10 @@ class Display:
                     if self.tag_active:
                         self.graphics_y += char_height
                     else:
-                        self.streams[stream]["text_row"] = max(1, self.streams[stream]["text_row"] - 1)
+                        if self.streams[stream]["text_row"] > 1:
+                            self.streams[stream]["text_row"] -= 1
+                        else:
+                            self.scroll_window_down(stream)
                 elif char_code == 12: # FF (Clear Window)
                     self.clear_graphics(stream) # Text clear
                 elif char_code == 13: # CR (Left edge)
@@ -1089,6 +1142,54 @@ class Display:
 
         return self.logical_surface
 
+    def _draw_cursors(self):
+        saved_patches = []
+        if not hasattr(self, 'streams'):
+            return saved_patches
+        max_cols = self.get_max_cols()
+        char_width = self.logical_width // max_cols
+        char_height = 16
+        num_pens = 16 if self.mode == 0 else (4 if self.mode == 1 else 2)
+
+        for stream, s in self.streams.items():
+            if s.get('cursor_sys', 0) and s.get('cursor_user', 1):
+                left, right, top, bottom = self.get_text_window(stream)
+                win_cols = right - left + 1
+                win_rows = bottom - top + 1
+                col = s.get('text_col', 1)
+                row = s.get('text_row', 1)
+                if col > win_cols:
+                    col = 1
+                    row = min(win_rows, row + 1)
+                col = max(1, min(win_cols, col))
+                row = max(1, min(win_rows, row))
+
+                abs_col = left + col - 1
+                abs_row = top + row - 1
+                px = (abs_col - 1) * char_width
+                py = (abs_row - 1) * char_height
+                rect = pygame.Rect(px, py, char_width, char_height).clip(self.logical_surface.get_rect())
+                if rect.width > 0 and rect.height > 0:
+                    patch = pygame.Surface((rect.width, rect.height), depth=8)
+                    patch.set_palette(self.logical_surface.get_palette())
+                    patch.blit(self.logical_surface, (0, 0), rect)
+                    saved_patches.append((rect, patch))
+
+                    pen = s.get('pen', self.current_pen) % num_pens
+                    paper = s.get('paper', self.current_paper) % num_pens
+                    xor_mask = pen ^ paper
+                    if xor_mask == 0:
+                        xor_mask = (pen + 1) % num_pens
+                    for cy in range(rect.height):
+                        for cx in range(rect.width):
+                            curr = self.logical_surface.get_at_mapped((rect.x + cx, rect.y + cy))
+                            pygame.draw.rect(self.logical_surface, curr ^ xor_mask, pygame.Rect(rect.x + cx, rect.y + cy, 1, 1))
+        return saved_patches
+
+    def _restore_cursors(self, saved_patches):
+        for rect, patch in reversed(saved_patches):
+            self.logical_surface.blit(patch, (rect.x, rect.y))
+
     def update(self):
         total_time = self.speed_ink_1 + self.speed_ink_2
         current_phase = pygame.time.get_ticks() % total_time
@@ -1098,8 +1199,10 @@ class Display:
         active_border = self.border_color2 if flash_state and self.border_color2 is not None else self.border_color1
         self.screen.fill(CPC_PALETTE[active_border])
         
+        saved_patches = self._draw_cursors()
         source_surface = self.get_rendered_surface()
         scaled_surface = pygame.transform.scale(source_surface, (self.logical_width * self.scale, self.logical_height * self.scale))
+        self._restore_cursors(saved_patches)
         self.screen.blit(scaled_surface, (self.border_size_logical * self.scale, self.border_size_logical * self.scale))
         pygame.display.flip()
 
@@ -1131,34 +1234,44 @@ class Display:
 
     def input_string(self, stream=0):
         input_str = ""
-        while True:
-            if getattr(self, 'quit_requested', False):
-                return ""
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.quit_requested = True
-                    pygame.display.quit()
+        old_sys = self.streams[stream].get('cursor_sys', 0) if hasattr(self, 'streams') and stream in self.streams else 0
+        if hasattr(self, 'streams') and stream in self.streams:
+            self.streams[stream]['cursor_sys'] = 1
+        self.update()
+        try:
+            while True:
+                if getattr(self, 'quit_requested', False):
                     return ""
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        self.print_text('\r\n', stream=stream)
-                        self.update()
-                        return input_str
-                    elif event.key == pygame.K_BACKSPACE:
-                        if len(input_str) > 0:
-                            input_str = input_str[:-1]
-                            self.streams[stream]["text_col"] -= 1
-                            if self.streams[stream]["text_col"] < 1:
-                                self.streams[stream]["text_col"] = self.get_max_cols()
-                                self.streams[stream]["text_row"] -= 1
-                            self.print_text(' ', stream=stream)
-                            self.streams[stream]["text_col"] -= 1
-                            if self.streams[stream]["text_col"] < 1:
-                                self.streams[stream]["text_col"] = self.get_max_cols()
-                                self.streams[stream]["text_row"] -= 1
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        self.quit_requested = True
+                        pygame.display.quit()
+                        return ""
+                    elif event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_RETURN:
+                            if hasattr(self, 'streams') and stream in self.streams:
+                                self.streams[stream]['cursor_sys'] = old_sys
+                            self.print_text('\r\n', stream=stream)
                             self.update()
-                    elif event.unicode and ord(event.unicode) >= 32:
-                        input_str += event.unicode
-                        self.print_text(event.unicode, stream=stream)
-                        self.update()
-            pygame.time.wait(10)
+                            return input_str
+                        elif event.key == pygame.K_BACKSPACE:
+                            if len(input_str) > 0:
+                                input_str = input_str[:-1]
+                                self.streams[stream]["text_col"] -= 1
+                                if self.streams[stream]["text_col"] < 1:
+                                    self.streams[stream]["text_col"] = self.get_max_cols()
+                                    self.streams[stream]["text_row"] -= 1
+                                self.print_text(' ', stream=stream)
+                                self.streams[stream]["text_col"] -= 1
+                                if self.streams[stream]["text_col"] < 1:
+                                    self.streams[stream]["text_col"] = self.get_max_cols()
+                                    self.streams[stream]["text_row"] -= 1
+                                self.update()
+                        elif event.unicode and ord(event.unicode) >= 32:
+                            input_str += event.unicode
+                            self.print_text(event.unicode, stream=stream)
+                            self.update()
+                pygame.time.wait(10)
+        finally:
+            if hasattr(self, 'streams') and stream in self.streams:
+                self.streams[stream]['cursor_sys'] = old_sys
