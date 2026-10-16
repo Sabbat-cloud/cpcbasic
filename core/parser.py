@@ -1591,7 +1591,7 @@ class Parser:
                     self.eat(SYMBOL)
                     if self.current_token.type == SYMBOL and self.current_token.value == '=':
                         self.eat(SYMBOL)
-                        sections.append(Literal('0', 'NUMBER'))
+                        sections.append(Literal('-1', 'NUMBER'))
                         sections.append(self.parse_expression())
                     else:
                         sections.append(self.parse_expression())
@@ -1607,7 +1607,12 @@ class Parser:
                 for i in range(6): # remaining up to 6 args
                     if self.current_token.type == SYMBOL and self.current_token.value == ',':
                         self.eat(SYMBOL)
-                        args.append(self.parse_expression())
+                        if (self.current_token.type in (NEWLINE, EOF) or
+                            (self.current_token.type == SYMBOL and self.current_token.value in (',', ':')) or
+                            (self.current_token.type == KEYWORD and self.current_token.value == 'ELSE')):
+                            args.append(None)
+                        else:
+                            args.append(self.parse_expression())
                     else:
                         break
                 
