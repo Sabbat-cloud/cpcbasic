@@ -79,7 +79,9 @@ class Interpreter:
         self.z80 = Z80Registers()
         
         self.firmware_hooks = {
+            0xBB03: self.fw_km_reset,
             0xBB5A: self.fw_txt_output,
+            0xBB60: self.fw_txt_rd_char,
             0xBB18: self.fw_km_wait_char,
             0xBB06: self.fw_km_wait_char,
             0xBB75: self.fw_txt_set_cursor,
@@ -282,6 +284,10 @@ class Interpreter:
             return self.display.peek_video_ram(addr)
         return self.ram[addr]
 
+    def fw_km_reset(self):
+        if hasattr(self, 'display') and hasattr(self.display, 'key_buffer'):
+            self.display.key_buffer.clear()
+
     def fw_km_wait_char(self):
         while True:
             if getattr(self.display, 'quit_requested', False):
@@ -298,6 +304,15 @@ class Interpreter:
     def fw_txt_output(self):
         char = chr(self.z80.A)
         self.display.print_text(char)
+
+    def fw_txt_rd_char(self):
+        if hasattr(self, 'display') and hasattr(self.display, 'copychr'):
+            ch = self.display.copychr(0)
+            self.z80.A = ord(ch[0]) if ch else 32
+            self.z80.F |= 1
+        else:
+            self.z80.A = 32
+            self.z80.F |= 1
 
     def fw_txt_set_cursor(self):
         self.display.locate(self.z80.H, self.z80.L)
@@ -464,6 +479,292 @@ class Interpreter:
     def fw_mc_set_mode(self):
         mode = getattr(self.z80, 'A', 0)
         self.display.set_hardware_mode(mode)
+
+    def execute_machine_code(self, start_addr):
+        pc = start_addr & 0xFFFF
+        max_instructions = 100000
+        call_stack = []
+        instructions_run = 0
+
+        def get_reg8(idx):
+            if idx == 0: return self.z80.B
+            elif idx == 1: return self.z80.C
+            elif idx == 2: return self.z80.D
+            elif idx == 3: return self.z80.E
+            elif idx == 4: return self.z80.H
+            elif idx == 5: return self.z80.L
+            elif idx == 6: return self.ram[self.z80.HL]
+            elif idx == 7: return self.z80.A
+            return 0
+
+        def set_reg8(idx, val):
+            val &= 0xFF
+            if idx == 0: self.z80.B = val
+            elif idx == 1: self.z80.C = val
+            elif idx == 2: self.z80.D = val
+            elif idx == 3: self.z80.E = val
+            elif idx == 4: self.z80.H = val
+            elif idx == 5: self.z80.L = val
+            elif idx == 6: self.ram[self.z80.HL] = val
+            elif idx == 7: self.z80.A = val
+
+        def get_reg16(idx):
+            if idx == 0: return self.z80.BC
+            elif idx == 1: return self.z80.DE
+            elif idx == 2: return self.z80.HL
+            elif idx == 3: return self.z80.SP
+            return 0
+
+        def set_reg16(idx, val):
+            val &= 0xFFFF
+            if idx == 0: self.z80.BC = val
+            elif idx == 1: self.z80.DE = val
+            elif idx == 2: self.z80.HL = val
+            elif idx == 3: self.z80.SP = val
+
+        def check_cc(cc):
+            # 0: NZ, 1: Z, 2: NC, 3: C
+            z = bool(self.z80.F & 0x40)
+            c = bool(self.z80.F & 0x01)
+            if cc == 0: return not z
+            elif cc == 1: return z
+            elif cc == 2: return not c
+            elif cc == 3: return c
+            return False
+
+        def alu_op(op, val):
+            val &= 0xFF
+            a = self.z80.A
+            if op == 0:  # ADD
+                res = a + val
+                self.z80.A = res & 0xFF
+                self.z80.F = (0x01 if res > 0xFF else 0) | (0x40 if (res & 0xFF) == 0 else 0)
+            elif op == 1:  # ADC
+                carry = 1 if (self.z80.F & 0x01) else 0
+                res = a + val + carry
+                self.z80.A = res & 0xFF
+                self.z80.F = (0x01 if res > 0xFF else 0) | (0x40 if (res & 0xFF) == 0 else 0)
+            elif op == 2:  # SUB
+                res = a - val
+                self.z80.A = res & 0xFF
+                self.z80.F = 0x02 | (0x01 if res < 0 else 0) | (0x40 if (res & 0xFF) == 0 else 0)
+            elif op == 3:  # SBC
+                carry = 1 if (self.z80.F & 0x01) else 0
+                res = a - val - carry
+                self.z80.A = res & 0xFF
+                self.z80.F = 0x02 | (0x01 if res < 0 else 0) | (0x40 if (res & 0xFF) == 0 else 0)
+            elif op == 4:  # AND
+                res = a & val
+                self.z80.A = res & 0xFF
+                self.z80.F = 0x10 | (0x40 if (res & 0xFF) == 0 else 0)
+            elif op == 5:  # XOR
+                res = a ^ val
+                self.z80.A = res & 0xFF
+                self.z80.F = 0x40 if (res & 0xFF) == 0 else 0
+            elif op == 6:  # OR
+                res = a | val
+                self.z80.A = res & 0xFF
+                self.z80.F = 0x40 if (res & 0xFF) == 0 else 0
+            elif op == 7:  # CP
+                res = a - val
+                self.z80.F = 0x02 | (0x01 if res < 0 else 0) | (0x40 if (res & 0xFF) == 0 else 0)
+
+        while instructions_run < max_instructions:
+            if pc in self.firmware_hooks:
+                self.firmware_hooks[pc]()
+                if call_stack:
+                    pc = call_stack.pop()
+                    continue
+                else:
+                    return True
+
+            opcode = self.ram[pc]
+            instructions_run += 1
+
+            if opcode == 0x00:  # NOP
+                pc = (pc + 1) & 0xFFFF
+
+            elif opcode == 0xCD:  # CALL nn
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                ret_addr = (pc + 3) & 0xFFFF
+                if target in self.firmware_hooks:
+                    self.firmware_hooks[target]()
+                    pc = ret_addr
+                else:
+                    call_stack.append(ret_addr)
+                    pc = target
+
+            elif (opcode & 0xC7) == 0xC4:  # CALL cc, nn
+                cc = (opcode >> 3) & 0x07
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                ret_addr = (pc + 3) & 0xFFFF
+                if check_cc(cc):
+                    if target in self.firmware_hooks:
+                        self.firmware_hooks[target]()
+                        pc = ret_addr
+                    else:
+                        call_stack.append(ret_addr)
+                        pc = target
+                else:
+                    pc = ret_addr
+
+            elif opcode == 0xC3:  # JP nn
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                if target in self.firmware_hooks:
+                    self.firmware_hooks[target]()
+                    if call_stack:
+                        pc = call_stack.pop()
+                    else:
+                        return True
+                else:
+                    pc = target
+
+            elif (opcode & 0xC7) == 0xC2:  # JP cc, nn
+                cc = (opcode >> 3) & 0x07
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                if check_cc(cc):
+                    if target in self.firmware_hooks:
+                        self.firmware_hooks[target]()
+                        if call_stack:
+                            pc = call_stack.pop()
+                        else:
+                            return True
+                    else:
+                        pc = target
+                else:
+                    pc = (pc + 3) & 0xFFFF
+
+            elif opcode == 0x18:  # JR e
+                offset = self.ram[(pc + 1) & 0xFFFF]
+                if offset >= 128: offset -= 256
+                pc = (pc + 2 + offset) & 0xFFFF
+
+            elif (opcode & 0xE7) == 0x20:  # JR cc, e (NZ, Z, NC, C)
+                cc = (opcode >> 3) & 0x03
+                offset = self.ram[(pc + 1) & 0xFFFF]
+                if offset >= 128: offset -= 256
+                if check_cc(cc):
+                    pc = (pc + 2 + offset) & 0xFFFF
+                else:
+                    pc = (pc + 2) & 0xFFFF
+
+            elif opcode == 0x10:  # DJNZ e
+                offset = self.ram[(pc + 1) & 0xFFFF]
+                if offset >= 128: offset -= 256
+                self.z80.B = (self.z80.B - 1) & 0xFF
+                if self.z80.B != 0:
+                    pc = (pc + 2 + offset) & 0xFFFF
+                else:
+                    pc = (pc + 2) & 0xFFFF
+
+            elif opcode == 0xC9:  # RET
+                if call_stack:
+                    pc = call_stack.pop()
+                else:
+                    return True
+
+            elif (opcode & 0xC7) == 0xC0:  # RET cc
+                cc = (opcode >> 3) & 0x07
+                if check_cc(cc):
+                    if call_stack:
+                        pc = call_stack.pop()
+                    else:
+                        return True
+                else:
+                    pc = (pc + 1) & 0xFFFF
+
+            elif opcode == 0x32:  # LD (nn), A
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                self.ram[target] = self.z80.A & 0xFF
+                pc = (pc + 3) & 0xFFFF
+
+            elif opcode == 0x3A:  # LD A, (nn)
+                target = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                self.z80.A = self.ram[target]
+                pc = (pc + 3) & 0xFFFF
+
+            elif (opcode & 0xCF) == 0x01:  # LD rr, nn
+                r_idx = (opcode >> 4) & 0x03
+                val = self.ram[(pc + 1) & 0xFFFF] | (self.ram[(pc + 2) & 0xFFFF] << 8)
+                set_reg16(r_idx, val)
+                pc = (pc + 3) & 0xFFFF
+
+            elif (opcode & 0xC7) == 0x06:  # LD r, n
+                r_idx = (opcode >> 3) & 0x07
+                val = self.ram[(pc + 1) & 0xFFFF]
+                set_reg8(r_idx, val)
+                pc = (pc + 2) & 0xFFFF
+
+            elif 0x40 <= opcode <= 0x7F:
+                if opcode == 0x76:  # HALT
+                    return True
+                dest = (opcode >> 3) & 0x07
+                src = opcode & 0x07
+                set_reg8(dest, get_reg8(src))
+                pc = (pc + 1) & 0xFFFF
+
+            elif 0x80 <= opcode <= 0xBF:  # ALU A, r
+                op = (opcode >> 3) & 0x07
+                src = opcode & 0x07
+                alu_op(op, get_reg8(src))
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xC7) == 0xC6:  # ALU A, n
+                op = (opcode >> 3) & 0x07
+                val = self.ram[(pc + 1) & 0xFFFF]
+                alu_op(op, val)
+                pc = (pc + 2) & 0xFFFF
+
+            elif (opcode & 0xC7) == 0x04:  # INC r
+                r_idx = (opcode >> 3) & 0x07
+                val = (get_reg8(r_idx) + 1) & 0xFF
+                set_reg8(r_idx, val)
+                self.z80.F = (self.z80.F & 0x01) | (0x40 if val == 0 else 0)
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xC7) == 0x05:  # DEC r
+                r_idx = (opcode >> 3) & 0x07
+                val = (get_reg8(r_idx) - 1) & 0xFF
+                set_reg8(r_idx, val)
+                self.z80.F = (self.z80.F & 0x01) | 0x02 | (0x40 if val == 0 else 0)
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xCF) == 0x03:  # INC rr
+                r_idx = (opcode >> 4) & 0x03
+                set_reg16(r_idx, (get_reg16(r_idx) + 1) & 0xFFFF)
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xCF) == 0x0B:  # DEC rr
+                r_idx = (opcode >> 4) & 0x03
+                set_reg16(r_idx, (get_reg16(r_idx) - 1) & 0xFFFF)
+                pc = (pc + 1) & 0xFFFF
+
+            elif opcode == 0xEB:  # EX DE, HL
+                self.z80.DE, self.z80.HL = self.z80.HL, self.z80.DE
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xCF) == 0xC5:  # PUSH rr (BC, DE, HL, AF)
+                r_idx = (opcode >> 4) & 0x03
+                val = self.z80.AF if r_idx == 3 else get_reg16(r_idx)
+                self.z80.SP = (self.z80.SP - 2) & 0xFFFF
+                self.ram[self.z80.SP] = val & 0xFF
+                self.ram[(self.z80.SP + 1) & 0xFFFF] = (val >> 8) & 0xFF
+                pc = (pc + 1) & 0xFFFF
+
+            elif (opcode & 0xCF) == 0xC1:  # POP rr (BC, DE, HL, AF)
+                r_idx = (opcode >> 4) & 0x03
+                val = self.ram[self.z80.SP] | (self.ram[(self.z80.SP + 1) & 0xFFFF] << 8)
+                self.z80.SP = (self.z80.SP + 2) & 0xFFFF
+                if r_idx == 3:
+                    self.z80.AF = val
+                else:
+                    set_reg16(r_idx, val)
+                pc = (pc + 1) & 0xFFFF
+
+            else:
+                return False
+
+        return False
 
     def get_joy_state(self, joy_id):
         keys = pygame.key.get_pressed()
@@ -1292,7 +1593,7 @@ class Interpreter:
                                 self.firmware_hooks[fw_addr]()
                             else:
                                 print(f"Warning: Unimplemented CALL &{addr:04X}")
-                        else:
+                        elif not self.execute_machine_code(addr):
                             print(f"Warning: Unimplemented CALL &{addr:04X}")
 
                     elif isinstance(stmt, GotoStatement):
