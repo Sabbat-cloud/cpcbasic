@@ -111,7 +111,9 @@ class Interpreter:
             0xBCBF: self.fw_sound_tone_envelope,
             0xBD19: self.fw_mc_wait_flyback,
             0xBD1C: self.fw_mc_set_mode,
-            0xBC14: self.fw_scr_clear
+            0xBC05: self.fw_scr_set_offset,
+            0xBC14: self.fw_scr_clear,
+            0xBC59: self.fw_scr_access
         }
         
         self.line_numbers = sorted(list(self.program.lines.keys())) if self.program else []
@@ -354,6 +356,15 @@ class Interpreter:
     def fw_scr_clear(self):
         self.display.clear_graphics_window()
         self.display.clear_graphics(0) # stream 0
+
+    def fw_scr_set_offset(self):
+        # &BC05: SCR SET OFFSET (HL = screen base/offset)
+        pass
+
+    def fw_scr_access(self):
+        # &BC59: GRA SET WRITE MODE (A = write mode: 0=normal, 1=XOR, 2=AND, 3=OR)
+        if hasattr(self, 'display') and hasattr(self.display, 'set_graphics_write_mode'):
+            self.display.set_graphics_write_mode(self.z80.A % 4)
 
     def fw_scr_set_ink(self):
         self.display.set_ink(self.z80.A, self.z80.B, self.z80.C)

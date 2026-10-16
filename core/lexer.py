@@ -34,7 +34,7 @@ token_specification = [
     ('COMMENT',  r"\bREM\b.*"),
     ('APOSTROPHE', r"'"),
     ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_.]*[%!\$]?'), 
-    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@\.]'), 
+    ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@\.\[\]]'), 
     ('NEWLINE',  r'\n'),                   
     ('SKIP',     r'[ \t\r]+'),               
     ('MISMATCH', r'.'),                    
@@ -115,6 +115,12 @@ class Lexer:
                     if not in_data:
                         kind = 'KEYWORD'
                         value = 'PRINT'
+                elif kind == 'SYMBOL' and value == '[':
+                    if not in_data:
+                        value = '('
+                elif kind == 'SYMBOL' and value == ']':
+                    if not in_data:
+                        value = ')'
                 elif kind == 'IDENTIFIER':
                     if in_data:
                         # Inside DATA statements, unquoted strings preserve their casing

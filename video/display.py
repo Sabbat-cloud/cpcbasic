@@ -989,34 +989,131 @@ class Display:
         self.process_events()
         keys = pygame.key.get_pressed()
         
-        # Mapeo de teclas de hardware del Amstrad CPC a Pygame
-        # Valores extraídos de 'varios.pdf' Parte 5: Esquemas del teclado
+        # Mapeo completo de la matriz del teclado de hardware del Amstrad CPC (0-79) a Pygame
+        # Extraído del Manual de Firmware oficial del Amstrad CPC (Apéndice I: Key Numbering)
         cpc_to_pygame = {
-            # Teclas especiales
-            47: pygame.K_SPACE,
-            18: pygame.K_RETURN,
-            14: pygame.K_KP_ENTER,
-            66: pygame.K_ESCAPE,
-            16: pygame.K_BACKSPACE, # DEL en CPC
-            15: pygame.K_DELETE,    # CLR en CPC
-            
-            # Cursores
-            0:  pygame.K_UP,
-            2:  pygame.K_DOWN,
-            8:  pygame.K_LEFT,
-            1:  pygame.K_RIGHT,
-            
-            # Joystick 0 (a menudo leído vía INKEY en juegos)
-            72: pygame.K_UP,
-            73: pygame.K_DOWN,
-            74: pygame.K_LEFT,
-            75: pygame.K_RIGHT,
-            76: pygame.K_x,     # Fire 1
-            77: pygame.K_z,     # Fire 2
+            # Línea 0 (&40)
+            0:  (pygame.K_UP,),
+            1:  (pygame.K_RIGHT,),
+            2:  (pygame.K_DOWN,),
+            3:  (pygame.K_KP9, pygame.K_F9),
+            4:  (pygame.K_KP6, pygame.K_F6),
+            5:  (pygame.K_KP3, pygame.K_F3),
+            6:  (pygame.K_KP_ENTER,),
+            7:  (pygame.K_KP_PERIOD,),
+
+            # Línea 1 (&41)
+            8:  (pygame.K_LEFT,),
+            9:  (pygame.K_HOME, pygame.K_INSERT),  # Copy
+            10: (pygame.K_F7,),
+            11: (pygame.K_F8,),
+            12: (pygame.K_F5,),
+            13: (pygame.K_F1,),
+            14: (pygame.K_F2,),
+            15: (pygame.K_KP0,),                    # F0
+
+            # Línea 2 (&42)
+            16: (pygame.K_DELETE,),                  # Clr
+            17: (pygame.K_LEFTBRACKET,),             # [
+            18: (pygame.K_RETURN, pygame.K_KP_ENTER),# Return
+            19: (pygame.K_RIGHTBRACKET,),            # ]
+            20: (pygame.K_F4,),
+            21: (pygame.K_LSHIFT, pygame.K_RSHIFT),  # Shift
+            22: (pygame.K_BACKSLASH,),
+            23: (pygame.K_LCTRL, pygame.K_RCTRL),    # Control
+
+            # Línea 3 (&43)
+            24: (pygame.K_6,),                       # ^
+            25: (pygame.K_MINUS, pygame.K_KP_MINUS), # -
+            26: (pygame.K_2,),                       # @
+            27: (pygame.K_p,),
+            28: (pygame.K_SEMICOLON,),
+            29: (pygame.K_SEMICOLON,),               # :
+            30: (pygame.K_SLASH, pygame.K_KP_DIVIDE),# /
+            31: (pygame.K_PERIOD,),
+
+            # Línea 4 (&44)
+            32: (pygame.K_0, pygame.K_KP0),
+            33: (pygame.K_9, pygame.K_KP9),
+            34: (pygame.K_o,),
+            35: (pygame.K_i,),
+            36: (pygame.K_l,),
+            37: (pygame.K_k,),
+            38: (pygame.K_m,),
+            39: (pygame.K_COMMA,),
+
+            # Línea 5 (&45)
+            40: (pygame.K_8, pygame.K_KP8),
+            41: (pygame.K_7, pygame.K_KP7),
+            42: (pygame.K_u,),
+            43: (pygame.K_y,),
+            44: (pygame.K_h,),
+            45: (pygame.K_j,),
+            46: (pygame.K_n,),                       # N ('No' en Sultan)
+            47: (pygame.K_SPACE,),                   # Space
+
+            # Línea 6 (&46)
+            48: (pygame.K_6, pygame.K_KP6),
+            49: (pygame.K_5, pygame.K_KP5),
+            50: (pygame.K_r,),
+            51: (pygame.K_t,),
+            52: (pygame.K_g,),
+            53: (pygame.K_f,),
+            54: (pygame.K_b,),
+            55: (pygame.K_v,),
+
+            # Línea 7 (&47)
+            56: (pygame.K_4, pygame.K_KP4),
+            57: (pygame.K_3, pygame.K_KP3),
+            58: (pygame.K_e,),
+            59: (pygame.K_w,),
+            60: (pygame.K_s, pygame.K_y),            # S ('Si' en Sultan, y 'Y' como alias de Yes)
+            61: (pygame.K_d,),
+            62: (pygame.K_c,),
+            63: (pygame.K_x,),
+
+            # Línea 8 (&48)
+            64: (pygame.K_1, pygame.K_KP1),
+            65: (pygame.K_2, pygame.K_KP2),
+            66: (pygame.K_ESCAPE,),                  # Esc
+            67: (pygame.K_q,),                       # Q ('Quit' en Sultan)
+            68: (pygame.K_TAB,),                     # Tab
+            69: (pygame.K_a,),
+            70: (pygame.K_CAPSLOCK,),
+            71: (pygame.K_z,),
+
+            # Línea 9 (&49 / Joysticks)
+            72: (pygame.K_UP,),                      # Joy 0 Up
+            73: (pygame.K_DOWN,),                    # Joy 0 Down
+            74: (pygame.K_LEFT,),                    # Joy 0 Left
+            75: (pygame.K_RIGHT,),                   # Joy 0 Right
+            76: (pygame.K_x,),                       # Joy 0 Fire 1
+            77: (pygame.K_z,),                       # Joy 0 Fire 2
+            78: (pygame.K_BACKSPACE,),               # DEL
+            79: (pygame.K_c,),                       # Joy 0 Fire 3
         }
         
-        if cpc_key in cpc_to_pygame:
-            return 0 if keys[cpc_to_pygame[cpc_key]] else -1
+        target_keys = cpc_to_pygame.get(cpc_key)
+        if target_keys:
+            def is_pressed(k):
+                try:
+                    return bool(keys[k])
+                except (IndexError, TypeError):
+                    return False
+
+            if any(is_pressed(k) for k in target_keys):
+                if cpc_key in (21, 23):
+                    return 0
+                mods = pygame.key.get_mods() if hasattr(pygame.key, 'get_mods') else 0
+                has_shift = bool(mods & pygame.KMOD_SHIFT) or is_pressed(pygame.K_LSHIFT) or is_pressed(pygame.K_RSHIFT)
+                has_ctrl = bool(mods & pygame.KMOD_CTRL) or is_pressed(pygame.K_LCTRL) or is_pressed(pygame.K_RCTRL)
+                if has_shift and has_ctrl:
+                    return 160
+                elif has_shift:
+                    return 32
+                elif has_ctrl:
+                    return 128
+                return 0
         return -1
 
     def set_speed_ink(self, time1, time2):
