@@ -7,7 +7,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
-
+*.bak
 # OS
 .DS_Store
 Thumbs.db

@@ -458,7 +458,9 @@ class Display:
         try:
             s = int(stream)
             if hasattr(self, 'streams') and s in self.streams:
-                return self.streams[s]['text_col']
+                left, right, top, bottom = self.get_text_window(s)
+                win_cols = right - left + 1
+                return max(1, min(win_cols, self.streams[s]['text_col']))
         except (ValueError, TypeError):
             pass
         return 1
@@ -467,7 +469,9 @@ class Display:
         try:
             s = int(stream)
             if hasattr(self, 'streams') and s in self.streams:
-                return self.streams[s]['text_row']
+                left, right, top, bottom = self.get_text_window(s)
+                win_rows = bottom - top + 1
+                return max(1, min(win_rows, self.streams[s]['text_row']))
         except (ValueError, TypeError):
             pass
         return 1
@@ -606,10 +610,11 @@ class Display:
                         self.streams[stream]["text_col"] -= 1
                         if self.streams[stream]["text_col"] < 1:
                             self.streams[stream]["text_col"] = win_cols
-                            if self.streams[stream]["text_row"] > 1:
-                                self.streams[stream]["text_row"] -= 1
-                            else:
+                            if self.streams[stream]["text_row"] < 1:
                                 self.scroll_window_down(stream)
+                                self.streams[stream]["text_row"] = 0
+                            else:
+                                self.streams[stream]["text_row"] -= 1
                 elif char_code == 9: # TAB (Right)
                     if self.tag_active:
                         self.graphics_x += char_width
@@ -617,26 +622,29 @@ class Display:
                         self.streams[stream]["text_col"] += 1
                         if self.streams[stream]["text_col"] > win_cols:
                             self.streams[stream]["text_col"] = 1
-                            if self.streams[stream]["text_row"] < win_rows:
-                                self.streams[stream]["text_row"] += 1
-                            else:
+                            if self.streams[stream]["text_row"] > win_rows:
                                 self.scroll_window_up(stream)
+                                self.streams[stream]["text_row"] = win_rows + 1
+                            else:
+                                self.streams[stream]["text_row"] += 1
                 elif char_code == 10: # LF (Down)
                     if self.tag_active:
                         self.graphics_y -= char_height
                     else:
-                        if self.streams[stream]["text_row"] < win_rows:
-                            self.streams[stream]["text_row"] += 1
-                        else:
+                        if self.streams[stream]["text_row"] > win_rows:
                             self.scroll_window_up(stream)
+                            self.streams[stream]["text_row"] = win_rows + 1
+                        else:
+                            self.streams[stream]["text_row"] += 1
                 elif char_code == 11: # VT (Up)
                     if self.tag_active:
                         self.graphics_y += char_height
                     else:
-                        if self.streams[stream]["text_row"] > 1:
-                            self.streams[stream]["text_row"] -= 1
-                        else:
+                        if self.streams[stream]["text_row"] < 1:
                             self.scroll_window_down(stream)
+                            self.streams[stream]["text_row"] = 0
+                        else:
+                            self.streams[stream]["text_row"] -= 1
                 elif char_code == 12: # FF (Clear Window)
                     self.clear_graphics(stream) # Text clear
                 elif char_code == 13: # CR (Left edge)
@@ -671,10 +679,13 @@ class Display:
                 if not self.tag_active:
                     if self.streams[stream]["text_col"] > win_cols:
                         self.streams[stream]["text_col"] = 1
-                        if self.streams[stream]["text_row"] < win_rows:
-                            self.streams[stream]["text_row"] += 1
-                        else:
-                            self.scroll_window_up(stream)
+                        self.streams[stream]["text_row"] += 1
+                    if self.streams[stream]["text_row"] > win_rows:
+                        self.scroll_window_up(stream)
+                        self.streams[stream]["text_row"] = win_rows
+                    elif self.streams[stream]["text_row"] < 1:
+                        self.scroll_window_down(stream)
+                        self.streams[stream]["text_row"] = 1
 
                 if self.tag_active:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)

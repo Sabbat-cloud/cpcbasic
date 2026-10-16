@@ -81,6 +81,8 @@ if __name__ == '__main__':
         import pygame
         while not getattr(interpreter.display, 'quit_requested', False):
             try:
+                if hasattr(interpreter, 'sound'):
+                    interpreter.sound.update_queues()
                 interpreter.display.process_events()
                 if not getattr(interpreter.display, 'quit_requested', False):
                     interpreter.display.update()

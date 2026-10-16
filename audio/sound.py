@@ -24,8 +24,8 @@ class SoundEngine:
         # Precalcular tabla de las 16 formas de envolvente hardware del AY-3-8912 (Reg 13, shapes 0..15)
         self._hw_env_lut = self._build_hw_env_lut()
 
-        # Precalcular secuencia del LFSR de 17 bits del AY-3-8912 (x^17 + x^14 + 1)
-        self._lfsr_table = self._build_lfsr_table(65536)
+        # Precalcular secuencia del LFSR de 17 bits del AY-3-8912 (x^17 + x^14 + 1, 131071 estados)
+        self._lfsr_table = self._build_lfsr_table(131072)
         self._lfsr_pos = 0
 
         # Fase continua por canal para evitar clics entre notas consecutivas
@@ -68,7 +68,7 @@ class SoundEngine:
                     lut[shape, idx] = s if dir_up else (15 - s)
         return lut
 
-    def _build_lfsr_table(self, length=65536):
+    def _build_lfsr_table(self, length=131072):
         """Genera la secuencia exacta del LFSR de 17 bits del AY-3-8912 (polinomio bit0 ^ bit3)."""
         table = np.empty(length, dtype=np.int32)
         lfsr = 1
@@ -243,14 +243,14 @@ class SoundEngine:
 
             if steps == 0:
                 # Sección de volumen absoluto (0, abs_vol, pause_time)
-                vol_reg = step_size & 0x0F
+                vol_reg = min(15, max(0, step_size))
                 e = 0
             else:
                 # Sección de volumen relativo (steps > 0, step_size, pause_time)
                 e -= 1
                 if step_size != 0 or (vol_reg & 0x80) != 0:
-                    # sound.asm líneas 847-851: add a,c ; and $0f (wrap módulo 16)
-                    vol_reg = ((vol_reg & 0x0F) + step_size) & 0x0F
+                    # En CPC BASIC las envolventes limitan la amplitud en los topes [0..15]
+                    vol_reg = min(15, max(0, (vol_reg & 0x0F) + step_size))
                 # Si step_size == 0 y bit 7 == 0 (ej. tras envolvente hardware 0x10), conserva vol_reg
 
             pause_csec = 256 if pause_time == 0 else pause_time
@@ -393,7 +393,8 @@ class SoundEngine:
 
         # 2. Expandir periodos y generar onda cuadrada de tono con fase continua
         expanded_periods = np.repeat(tick_periods, self.samples_per_tick)
-        tone_enabled = not (period == 0 and ent == 0)
+        # En sound.asm línea 637: si period == 0, se salta set_tone_and_get_tone_envelope y no hay tono
+        tone_enabled = (period > 0)
         noise_enabled = (noise > 0)
 
         # En sound.asm líneas 996-1004: si ni tono ni ruido están activos, el canal se silencia
@@ -424,8 +425,9 @@ class SoundEngine:
             noise_val = max(1, int(noise) & 0x1F)
             noise_freq = 62500.0 / noise_val
             step_inc = noise_freq / self.sample_rate
-            lfsr_indices = (self._lfsr_pos + (np.arange(num_samples, dtype=np.float64) * step_inc).astype(np.int32)) & 0xFFFF
-            self._lfsr_pos = int((self._lfsr_pos + int(num_samples * step_inc) + 1) & 0xFFFF)
+            lfsr_mask = len(self._lfsr_table) - 1
+            lfsr_indices = (self._lfsr_pos + (np.arange(num_samples, dtype=np.float64) * step_inc).astype(np.int32)) & lfsr_mask
+            self._lfsr_pos = int((self._lfsr_pos + int(num_samples * step_inc) + 1) & lfsr_mask)
             noise_wave = self._lfsr_table[lfsr_indices]
         else:
             noise_wave = np.ones(num_samples, dtype=np.int32)
@@ -494,12 +496,11 @@ class SoundEngine:
                     pygame.time.wait(5)
                     self.update_queues()
 
-        # Sintetizar sonido y encolar en cada canal destino
-        sound_obj = self._synthesize_sound(target_channels[0], period, duration, volume, env, ent, noise)
-        if sound_obj is None:
-            return True
-
+        # Sintetizar sonido y encolar en cada canal destino (manteniendo fase continua por canal)
         for c_id in target_channels:
+            sound_obj = self._synthesize_sound(c_id, period, duration, volume, env, ent, noise)
+            if sound_obj is None:
+                continue
             self_bit = 1 << c_id
             rv_mask = combined_rv & (~self_bit & 7)
             item = {
@@ -630,6 +631,8 @@ class SoundEngine:
                 if self.channel_status_byte[c_id] == 8 or self.channel_held.get(c_id, False):
                     self.channel_status_byte[c_id] = 0
                     self.channel_held[c_id] = False
+                for item in self.channel_queues[c_id]:
+                    item['hold'] = False
         self.update_queues()
 
     def hold_all(self):

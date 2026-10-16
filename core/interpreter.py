@@ -98,8 +98,15 @@ class Interpreter:
             0xBC32: self.fw_scr_set_ink,
             0xBC38: self.fw_scr_set_border,
             0xBB24: self.fw_km_get_joystick,
+            0xBCA7: self.fw_sound_reset,
             0xBCAA: self.fw_sound_queue,
-            0xBCA7: self.fw_sound_check,
+            0xBCAD: self.fw_sound_check,
+            0xBCB0: self.fw_sound_arm_event,
+            0xBCB3: self.fw_sound_release,
+            0xBCB6: self.fw_sound_hold,
+            0xBCB9: self.fw_sound_continue,
+            0xBCBC: self.fw_sound_ampl_envelope,
+            0xBCBF: self.fw_sound_tone_envelope,
             0xBD19: self.fw_mc_wait_flyback,
             0xBD1C: self.fw_mc_set_mode,
             0xBC14: self.fw_scr_clear
@@ -158,7 +165,7 @@ class Interpreter:
             "MID_STR": lambda s, start, n=None: s[self.cint(start)-1:self.cint(start)-1+self.cint(n)] if n is not None else s[self.cint(start)-1:],
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
-            "SQ": lambda x: self.sound.get_sq_status(self.cint(x)),
+            "SQ": self.function_sq,
             "LEN": len,
             "TEST": lambda x, y: self.display.test(self.cint(x), self.cint(y)) if hasattr(self.display, 'test') else 0,
             "TESTR": lambda x, y: self.display.test(self.display.graphics_x + self.cint(x), self.display.graphics_y + self.cint(y)) if hasattr(self.display, 'test') else 0,
@@ -347,9 +354,24 @@ class Interpreter:
         self.z80.H = joy0
         self.z80.L = joy1
         
+    def function_sq(self, channel_arg):
+        """Función BASIC SQ(channel): devuelve estado de la cola y desarma eventos ON SQ."""
+        ch = self.cint(channel_arg)
+        if hasattr(self, 'sq_timers') and ch in self.sq_timers:
+            del self.sq_timers[ch]
+        return self.sound.get_sq_status(ch)
+
+    def fw_sound_reset(self):
+        """SOUND RESET (&BCA7): Silencia todos los canales y limpia las colas."""
+        self.sound.reset()
+        if hasattr(self, 'sq_timers'):
+            self.sq_timers.clear()
+
     def fw_sound_queue(self):
+        """SOUND QUEUE (&BCAA): Añade un sonido a la cola desde el bloque en HL."""
         addr = self.z80.HL
         if addr + 8 > 65535:
+            self.z80.F &= ~1  # Carry clear (fallo)
             return
             
         status = self.ram[addr]
@@ -360,19 +382,72 @@ class Interpreter:
         volume = self.ram[addr+6]
         duration = self.ram[addr+7] | (self.ram[addr+8] << 8)
         
-        # Convert duration to 16-bit signed
+        # Convertir duración a entero con signo de 16 bits
         duration = self._to_signed16(duration)
         
-        # We need to translate status into CPC BASIC SOUND command expectations:
-        # play_sound signature: (channel_status, period, duration, volume, env, ent, noise)
-        self.sound.play_sound(status, period, duration, volume, env, ent, noise)
+        # Desarmar interrupciones ON SQ en los canales de destino (sound.asm línea 352)
+        if hasattr(self, 'sq_timers'):
+            for ch_bit in (1, 2, 4):
+                if (status & ch_bit) and ch_bit in self.sq_timers:
+                    del self.sq_timers[ch_bit]
+                    
+        ok = self.sound.play_sound(status, period, duration, volume, env, ent, noise, blocking=False)
+        if ok:
+            self.z80.F |= 1   # Carry true
+        else:
+            self.z80.F &= ~1  # Carry false
 
     def fw_sound_check(self):
-        status = 0
-        if (self.sound.get_sq_status(1) & 7) == 4: status |= 1 # A free
-        if (self.sound.get_sq_status(2) & 7) == 4: status |= 2 # B free
-        if (self.sound.get_sq_status(4) & 7) == 4: status |= 4 # C free
+        """SOUND CHECK (&BCAD): Comprueba el estado de la cola del canal indicado en A."""
+        chan_mask = self.z80.A
+        status = self.sound.get_sq_status(chan_mask)
         self.z80.A = status
+        # Desarmar eventos ON SQ para este canal (sound.asm línea 517)
+        if hasattr(self, 'sq_timers'):
+            for ch_bit in (1, 2, 4):
+                if (chan_mask & ch_bit) and ch_bit in self.sq_timers:
+                    del self.sq_timers[ch_bit]
+
+    def fw_sound_arm_event(self):
+        """SOUND ARM EVENT (&BCB0): Arma evento cuando hay espacio en la cola del canal en A."""
+        chan_mask = self.z80.A
+        status = self.sound.get_sq_status(chan_mask)
+        # Si la cola ya tiene espacio, el evento se ejecuta de inmediato (sound.asm línea 560)
+        # En emulación, la llamada directa gestiona el registro de eventos si procede
+        return status
+
+    def fw_sound_release(self):
+        """SOUND RELEASE (&BCB3): Libera canales en Hold según máscara de canales en A."""
+        channels = self.z80.A
+        self.sound.release_channels(channels)
+
+    def fw_sound_hold(self):
+        """SOUND HOLD (&BCB6): Pausa todos los canales activos del PSG."""
+        held = self.sound.hold_all()
+        if held:
+            self.z80.F |= 1
+        else:
+            self.z80.F &= ~1
+
+    def fw_sound_continue(self):
+        """SOUND CONTINUE (&BCB9): Reanuda todos los canales tras SOUND HOLD."""
+        self.sound.continue_all()
+
+    def fw_sound_ampl_envelope(self):
+        """SOUND AMPL ENVELOPE (&BCBC): Define envolvente de volumen desde bloque en HL."""
+        env_no = self.z80.A
+        addr = self.z80.HL
+        if addr + 16 <= 65536:
+            block = bytes(self.ram[addr:addr+16])
+            self.sound.set_env_from_ram(env_no, block)
+
+    def fw_sound_tone_envelope(self):
+        """SOUND TONE ENVELOPE (&BCBF): Define envolvente de tono desde bloque en HL."""
+        ent_no = self.z80.A
+        addr = self.z80.HL
+        if addr + 16 <= 65536:
+            block = bytes(self.ram[addr:addr+16])
+            self.sound.set_ent_from_ram(ent_no, block)
         
     def fw_mc_wait_flyback(self):
         current_time = pygame.time.get_ticks()
@@ -757,6 +832,7 @@ class Interpreter:
 
             # -- Timer Interrupt Check (AFTER / EVERY / SQ) --
             interrupt_triggered = False
+            self.sound.update_queues()
             if self.interrupts_enabled:
                 if hasattr(self, 'sq_timers'):
                     for channel, target in list(self.sq_timers.items()):
@@ -935,7 +1011,8 @@ class Interpreter:
                         if row is not None:
                             self.display.locate(col, row, stream)
                         else:
-                            self.display.locate(col, self.display.streams[stream]['text_row'] if hasattr(self.display, 'streams') else self.display.text_row, stream)
+                            curr_r = self.display.get_vpos(stream) if hasattr(self.display, 'get_vpos') else (self.display.streams[stream]['text_row'] if hasattr(self.display, 'streams') else self.display.text_row)
+                            self.display.locate(col, curr_r, stream)
                     
                     elif isinstance(stmt, ClsStatement):
                         stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
@@ -1155,7 +1232,7 @@ class Interpreter:
                             self.on_break_line = self.cint(self.evaluate(stmt.line_number))
                     
                     elif isinstance(stmt, OnSqStatement):
-                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel else 1
+                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel is not None else 1
                         target_line = self.cint(self.evaluate(stmt.line_number))
                         if not hasattr(self, 'sq_timers'):
                             self.sq_timers = {}
@@ -1163,7 +1240,8 @@ class Interpreter:
                             if channel in self.sq_timers:
                                 del self.sq_timers[channel]
                         else:
-                            self.sq_timers[channel] = target_line
+                            if channel in (1, 2, 4):
+                                self.sq_timers[channel] = target_line
 
                     elif isinstance(stmt, ErrorStatement):
                         code = self.cint(self.evaluate(stmt.code))
@@ -1712,14 +1790,20 @@ class Interpreter:
                         self.sound.set_ent(ent_no, sections)
 
                     elif isinstance(stmt, SoundStatement):
-                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel else 1
-                        period = self.cint(self.evaluate(stmt.period)) if stmt.period else 0
-                        duration = self.cint(self.evaluate(stmt.duration)) if stmt.duration else 20
-                        volume = self.cint(self.evaluate(stmt.volume)) if stmt.volume else 12
-                        env = self.cint(self.evaluate(stmt.env)) if stmt.env else 0
-                        ent = self.cint(self.evaluate(stmt.ent)) if stmt.ent else 0
-                        noise = self.cint(self.evaluate(stmt.noise)) if stmt.noise else 0
-                        print(f"[AUDIO] SOUND {channel},{period},{duration},{volume}")
+                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel is not None else 1
+                        period = self.cint(self.evaluate(stmt.period)) if stmt.period is not None else 0
+                        duration = self.cint(self.evaluate(stmt.duration)) if stmt.duration is not None else 20
+                        volume = self.cint(self.evaluate(stmt.volume)) if stmt.volume is not None else 12
+                        env = self.cint(self.evaluate(stmt.env)) if stmt.env is not None else 0
+                        ent = self.cint(self.evaluate(stmt.ent)) if stmt.ent is not None else 0
+                        noise = self.cint(self.evaluate(stmt.noise)) if stmt.noise is not None else 0
+                        
+                        # Desarmar interrupciones ON SQ en los canales de destino (sound.asm línea 352)
+                        if hasattr(self, 'sq_timers'):
+                            for ch_bit in (1, 2, 4):
+                                if (channel & ch_bit) and ch_bit in self.sq_timers:
+                                    del self.sq_timers[ch_bit]
+                                    
                         self.sound.play_sound(channel, period, duration, volume, env, ent, noise)
                     
                     elif isinstance(stmt, ReleaseStatement):
