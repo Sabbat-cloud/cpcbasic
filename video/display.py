@@ -122,19 +122,63 @@ class Display:
         if 0 <= char_code <= 255 and len(matrix) == 8:
             self.user_symbols[char_code] = matrix
 
+    def reset(self):
+        self.border_color1 = 1
+        self.border_color2 = None
+        self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
+        self.flash_inks = [None] * 16
+        self.flash_inks[14] = 24
+        self.flash_inks[15] = 11
+        self.speed_ink_1 = 10 * 20
+        self.speed_ink_2 = 10 * 20
+        self.current_pen = 1
+        self.current_paper = 0
+        self.graphics_pen = 1
+        self.graphics_paper = 0
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+        self.user_symbols = CPC_FONT.copy()
+        self.symbol_after_limit = 240
+        self.set_mode(1)
+
     def set_mode(self, mode):
         if mode in (0, 1, 2):
             self.mode = mode
             self.hardware_mode = mode
-            self.inks = [1, 24, 20, 6, 26, 0, 2, 8, 10, 12, 14, 16, 18, 22, 1, 16]
-            self.flash_inks = [None] * 16
-            self.flash_inks[14] = 24
-            self.flash_inks[15] = 11
-            self.current_pen = 1
-            self.current_paper = 0
-            self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
+            num_pens = 16 if mode == 0 else (4 if mode == 1 else 2)
+            self.current_pen = self.current_pen % num_pens
+            self.current_paper = self.current_paper % num_pens
+            self.graphics_pen = self.graphics_pen % num_pens
+            self.graphics_paper = self.graphics_paper % num_pens
+            self.bg_mode = 0
+            self.graphics_write_mode = 0
+            self.line_mask = 255
+            self.mask_first = 1
+            self.esc_state = 0
+            self.esc_cmd = ''
+            self.esc_args = []
+            self.transparent_text = False
+            self.tag_active = False
+            self.origin_x = 0
+            self.origin_y = 0
+            self.graphics_x = 0
+            self.graphics_y = 0
+            self.graphics_clip_rect = None
+            for i in range(8):
+                old_s = self.streams.get(i, {})
+                pen = old_s.get('pen', 1) % num_pens
+                paper = old_s.get('paper', 0) % num_pens
+                self.streams[i] = {
+                    'text_col': 1,
+                    'text_row': 1,
+                    'text_window': None,
+                    'paper': paper,
+                    'pen': pen,
+                    'transparent': False
+                }
+            self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
             self._update_palette(False)
-            self.logical_surface.fill(self.current_paper)
+            self.logical_surface.set_clip(None)
+            self.logical_surface.fill(0)
             self.update()
 
     def set_hardware_mode(self, hw_mode):
@@ -581,7 +625,6 @@ class Display:
 
                 if self.tag_active:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
-                    y -= char_height
                 else:
                     abs_col = left + self.streams[stream]["text_col"] - 1
                     abs_row = top + self.streams[stream]["text_row"] - 1
@@ -1068,7 +1111,17 @@ class Display:
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.esc_pressed = getattr(self, 'esc_pressed', False) or True
-                if event.unicode:
+                elif event.key == pygame.K_UP:
+                    self.key_buffer.append(chr(240))
+                elif event.key == pygame.K_DOWN:
+                    self.key_buffer.append(chr(241))
+                elif event.key == pygame.K_LEFT:
+                    self.key_buffer.append(chr(242))
+                elif event.key == pygame.K_RIGHT:
+                    self.key_buffer.append(chr(243))
+                elif event.key in (pygame.K_INSERT, pygame.K_LALT, pygame.K_RALT):
+                    self.key_buffer.append(chr(224))
+                elif event.unicode:
                     self.key_buffer.append(event.unicode)
 
     def clear_input(self):

@@ -33,7 +33,7 @@ token_specification = [
     ('STRING',   r'".*?(?:"|$)'),                
     ('COMMENT',  r"\bREM\b.*"),
     ('APOSTROPHE', r"'"),
-    ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_]*[%!\$]?'), 
+    ('IDENTIFIER', r'[A-Za-z_][A-Za-z0-9_.]*[%!\$]?'), 
     ('SYMBOL',   r'<=|>=|<>|[=<>\+\-\*/\^\\\(\),:;\?#\|@\.]'), 
     ('NEWLINE',  r'\n'),                   
     ('SKIP',     r'[ \t\r]+'),               

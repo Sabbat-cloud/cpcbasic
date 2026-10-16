@@ -51,12 +51,18 @@ class Interpreter:
         self.tag_active = False
         self.err_code = 0
         self.err_line = 0
+        self.next_stmt_idx = 0
+        if hasattr(self, 'restore_statements'):
+            del self.restore_statements
         if hasattr(self, 'display'):
             import pygame
             if pygame.display.get_surface() is None:
                 pygame.display.init()
-                self.display.screen = pygame.display.set_mode((self.display.width * self.display.scale, self.display.height * self.display.scale))
-            self.display.set_mode(1)
+                self.display.screen = pygame.display.set_mode((self.display.screen_width, self.display.screen_height))
+            if hasattr(self.display, 'reset'):
+                self.display.reset()
+            else:
+                self.display.set_mode(1)
             self.display.clear_input()
 
     def __init__(self, program, scale=2, speed='unlimited'):
@@ -137,26 +143,28 @@ class Interpreter:
             "YPOS": lambda *args: self.display.graphics_y,
             "POS": lambda stream=0: self.display.get_pos(stream) if hasattr(self.display, 'get_pos') else (self.display.streams[int(stream)]['text_col'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
             "VPOS": lambda stream=0: self.display.get_vpos(stream) if hasattr(self.display, 'get_vpos') else (self.display.streams[int(stream)]['text_row'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
-            "CHR_STR": cpc_chr,
+            "CHR_STR": lambda x: chr(self.cint(x) & 0xFF),
             "ASC": cpc_asc,
             "SQR": math.sqrt,
             "LOG": math.log,
             "LOG10": math.log10,
             "HIMEM": lambda: 42597,
             "VAL": lambda x: float(x) if '.' in str(x) else int(x) if str(x).lstrip('-').isdigit() else 0,
-            "RIGHT_STR": lambda s, n: s[-int(n):] if int(n) > 0 else "",
-            "MID_STR": lambda s, start, n=None: s[int(start)-1:int(start)-1+int(n)] if n is not None else s[int(start)-1:],
+            "RIGHT_STR": lambda s, n: s[-self.cint(n):] if self.cint(n) > 0 else "",
+            "MID_STR": lambda s, start, n=None: s[self.cint(start)-1:self.cint(start)-1+self.cint(n)] if n is not None else s[self.cint(start)-1:],
             "LOWER_STR": lambda s: s.lower(),
             "MAX": max,
-            "SQ": lambda x: self.sound.get_sq_status(int(x)),
+            "SQ": lambda x: self.sound.get_sq_status(self.cint(x)),
             "LEN": len,
-            "TEST": lambda x, y: self.display.test(x, y) if hasattr(self.display, 'test') else 0,
-            "TESTR": lambda x, y: self.display.test(self.display.graphics_x + x, self.display.graphics_y + y) if hasattr(self.display, 'test') else 0,
-            "REMAIN": lambda x: 0,
-            "INKEY": lambda key: self.display.get_inkey_state(int(key)),
+            "TEST": lambda x, y: self.display.test(self.cint(x), self.cint(y)) if hasattr(self.display, 'test') else 0,
+            "TESTR": lambda x, y: self.display.test(self.display.graphics_x + self.cint(x), self.display.graphics_y + self.cint(y)) if hasattr(self.display, 'test') else 0,
+            "REMAIN": self.do_remain,
+            "INKEY": lambda key: self.display.get_inkey_state(self.cint(key)),
             "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
             "CREAL": float,
-            "CINT": lambda x: int(self.cpc_round(x)),
+            "CINT": self.cint,
+            "CPC_IDIV": self.cpc_idiv,
+            "CPC_MOD": self.cpc_mod,
             "ERR": lambda: self.err_code,
             "ERL": lambda: self.err_line,
             "DERR": lambda: 0,
@@ -164,24 +172,24 @@ class Interpreter:
             "INP": lambda x=0: 0,
             "FIX": int,
             "ROUND": lambda x, d=0: self.cpc_round(x, d) if d > 0 else int(self.cpc_round(x, d)),
-            "UNT": lambda x: (int(x) & 0xFFFF) - 65536 if (int(x) & 0xFFFF) >= 32768 else (int(x) & 0xFFFF),
-            "LEFT_STR": lambda s, n: s[:int(n)] if int(n) > 0 else "",
+            "UNT": lambda x: (self.cint(x) & 0xFFFF) - 65536 if (self.cint(x) & 0xFFFF) >= 32768 else (self.cint(x) & 0xFFFF),
+            "LEFT_STR": lambda s, n: s[:self.cint(n)] if self.cint(n) > 0 else "",
             "UPPER_STR": lambda s: s.upper(),
             "STR_STR": lambda x: f" {x}" if x >= 0 else str(x),
-            "SPACE_STR": lambda n: " " * int(n),
-            "STRING_STR": lambda n, c: (chr(int(c)) if isinstance(c, (int, float)) else c[0]) * int(n),
-            "HEX_STR": lambda x, w=None: hex(int(x))[2:].upper().zfill(w) if w else hex(int(x))[2:].upper(),
-            "BIN_STR": lambda x, w=None: bin(int(x))[2:].zfill(w) if w else bin(int(x))[2:],
-            "INSTR": lambda a, b, c=None: b.find(c, int(a)-1) + 1 if c is not None else a.find(b) + 1,
+            "SPACE_STR": lambda n: " " * max(0, self.cint(n)),
+            "STRING_STR": lambda n, c: (chr(self.cint(c) & 0xFF) if isinstance(c, (int, float)) else c[0]) * max(0, self.cint(n)),
+            "HEX_STR": lambda x, w=None: hex(self.cint(x) & 0xFFFF)[2:].upper().zfill(self.cint(w)) if w else hex(self.cint(x) & 0xFFFF)[2:].upper(),
+            "BIN_STR": lambda x, w=None: bin(self.cint(x) & 0xFFFF)[2:].zfill(self.cint(w)) if w else bin(self.cint(x) & 0xFFFF)[2:],
+            "INSTR": lambda a, b, c=None: b.find(c, self.cint(a)-1) + 1 if c is not None else a.find(b) + 1,
             "PEEK": self.do_peek,
-            "JOY": lambda joy_id: self.get_joy_state(int(joy_id)),
+            "JOY": lambda joy_id: self.get_joy_state(self.cint(joy_id)),
             "ATN": lambda x: math.degrees(math.atan(x)) if self.angle_mode == 'DEG' else math.atan(x),
             "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
             "MIN": min,
             "EXP": math.exp,
             "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x),
-            "SPC": lambda x: " " * int(x),
-            "TAB": lambda x: " " * max(0, int(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, int(x) - 1),
+            "SPC": lambda x: " " * max(0, self.cint(x)),
+            "TAB": lambda x: " " * max(0, self.cint(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, self.cint(x) - 1),
             "EOF": self.check_eof
         }
         
@@ -200,9 +208,40 @@ class Interpreter:
             self.last_rnd = random.random()
         return self.last_rnd
 
+    def cint(self, x):
+        try:
+            f = float(x)
+            return int(math.copysign(math.floor(abs(f) + 0.5), f))
+        except (ValueError, TypeError):
+            return 0
+
     def cpc_round(self, x, d=0):
         m = 10 ** d
-        return math.floor(x * m + 0.5) / m if d > 0 else math.floor(x + 0.5)
+        val = x * m
+        rounded = math.copysign(math.floor(abs(val) + 0.5), val)
+        return rounded / m if d > 0 else int(rounded)
+
+    def cpc_idiv(self, a, b):
+        ia, ib = self.cint(a), self.cint(b)
+        if ib == 0:
+            raise ZeroDivisionError()
+        return int(ia / ib)
+
+    def cpc_mod(self, a, b):
+        ia, ib = self.cint(a), self.cint(b)
+        if ib == 0:
+            raise ZeroDivisionError()
+        return ia - int(ia / ib) * ib
+
+    def do_remain(self, timer_id):
+        t_id = self.cint(timer_id)
+        t_info = self.timers.get(t_id)
+        if t_info is not None:
+            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            rem_ms = max(0, t_info['next_trigger'] - current_time)
+            self.timers[t_id] = None
+            return int(rem_ms // 20)
+        return 0
 
     def check_eof(self):
         if not hasattr(self, 'file_in') or 9 not in self.file_in:
@@ -437,8 +476,7 @@ class Interpreter:
 
     def typecast(self, var_name, val):
         if var_name.endswith('%'):
-            try: return int(val)
-            except: return 0
+            return self.cint(val)
         elif var_name.endswith('!'):
             try: return float(val)
             except: return 0.0
@@ -447,8 +485,7 @@ class Interpreter:
         else:
             def_type = self.default_types.get(var_name[0].upper(), 'REAL')
             if def_type == 'INT':
-                try: return int(val)
-                except: return 0
+                return self.cint(val)
             elif def_type == 'STR':
                 return str(val)
             else:
@@ -508,7 +545,7 @@ class Interpreter:
                                 if next_idx >= len(expr.tokens) or expr.tokens[next_idx].value != '(':
                                     s += "()"
                         elif skip_next or val_upper in self.user_functions:
-                            safe_fn = val_upper.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                            safe_fn = val_upper.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC').replace('.', '_DOT_')
                             s += f"USER_FN_{safe_fn}"
                             # If called without parenthesis, add them
                             next_idx = i + 2 if skip_next else i + 1
@@ -517,7 +554,7 @@ class Interpreter:
                         elif (i + 2 if skip_next else i + 1) < len(expr.tokens) and expr.tokens[(i + 2 if skip_next else i + 1)].value == '(':
                             if t.value not in self.arrays:
                                 self.arrays[t.value] = {}
-                            s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                            s += t.value.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC').replace('.', '_DOT_')
                         else:
                             s += f"GET_VAR({repr(t.value)})"
                     elif t.type == 'HEX_NUMBER':
@@ -548,7 +585,12 @@ class Interpreter:
                             if kw in ("RND", "TIME", "XPOS", "YPOS", "VPOS", "POS", "INKEY", "JOY", "PEEK", "LEN", "ERR", "ERL", "EOF", "DERR", "FRE", "INP", "HIMEM"):
                                 if i + 1 >= len(expr.tokens) or expr.tokens[i+1].value != '(':
                                     s += "()"
-                        else: s += f' {kw} '
+                        elif (i + 1) < len(expr.tokens) and expr.tokens[i + 1].value == '(':
+                            if kw not in self.arrays:
+                                self.arrays[kw] = {}
+                            s += kw.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC').replace('.', '_DOT_')
+                        else:
+                            s += f"GET_VAR({repr(kw)})"
                     elif t.type == 'STRING':
                         s += repr(t.value)
                     else:
@@ -590,6 +632,10 @@ class Interpreter:
                             if isinstance(node.op, ast.BitXor):
                                 node.left = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.left], keywords=[])
                                 node.right = ast.Call(func=ast.Name(id='CINT', ctx=ast.Load()), args=[node.right], keywords=[])
+                            elif isinstance(node.op, ast.FloorDiv):
+                                return ast.copy_location(ast.Call(func=ast.Name(id='CPC_IDIV', ctx=ast.Load()), args=[node.left, node.right], keywords=[]), node)
+                            elif isinstance(node.op, ast.Mod):
+                                return ast.copy_location(ast.Call(func=ast.Name(id='CPC_MOD', ctx=ast.Load()), args=[node.left, node.right], keywords=[]), node)
                             return node
                             
                     tree = ast.parse(s.lstrip(), mode='eval')
@@ -602,12 +648,13 @@ class Interpreter:
                     return 0
 
             try:
+                cint_fn = self.cint
                 class ArrayWrapper:
                     def __init__(self, arr_dict, is_string):
                         self.arr_dict = arr_dict
                         self.is_string = is_string
                     def __call__(self, *args):
-                        return self.arr_dict.get(tuple(int(a) for a in args), "" if self.is_string else 0)
+                        return self.arr_dict.get(tuple(cint_fn(a) for a in args), "" if self.is_string else 0)
                 
                 eval_globals = self.builtins.copy()
                 def get_var_or_reg(name):
@@ -618,10 +665,10 @@ class Interpreter:
                 eval_globals['GET_INKEY_STR'] = lambda: self.display.get_inkey_str()
                 
                 for arr_name, arr_dict in self.arrays.items():
-                    safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                    safe_name = arr_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC').replace('.', '_DOT_')
                     eval_globals[safe_name] = ArrayWrapper(arr_dict, arr_name.endswith('$'))
                 for fn_name, fn_func in self.user_functions.items():
-                    safe_fn = fn_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC')
+                    safe_fn = fn_name.replace('%', '_PCT').replace('$', '_DLR').replace('!', '_EXC').replace('.', '_DOT_')
                     eval_globals[f"USER_FN_{safe_fn}"] = fn_func
                     
                 return eval(code_obj, eval_globals, {})
@@ -681,30 +728,19 @@ class Interpreter:
                 self.display.quit_requested = False
                 break
             is_real_speed = getattr(self, 'speed', 'unlimited') == 'real'
-            self.stmts_since_event += 1
-            
-            if is_real_speed:
-                pass # Throttling is now handled per-statement inside the execution loop
-
-            if self.stmts_since_event >= 100:
-                current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
-                self.last_time = current_time
-                if hasattr(self, 'display'):
-                    self.display.process_events()
-                    if current_time - getattr(self, 'last_update', 0) >= 20:
-                        self.display.update()
-                        self.last_update = current_time
-                        self.stmts_this_frame = 0
-                self.stmts_since_event = 0
-            else:
-                current_time = self.last_time
+            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            self.last_time = current_time
 
             # -- Keyboard Interrupt Check (ON BREAK) --
             if hasattr(self, 'display') and getattr(self.display, 'esc_pressed', False):
                 self.display.esc_pressed = False
                 action = getattr(self, 'on_break_action', 'CONT')
                 if action == 'GOSUB' and hasattr(self, 'on_break_line'):
-                    self.gosub_stack.append((self.pc, getattr(self, 'next_stmt_idx', 0), True))
+                    saved_restore = getattr(self, 'restore_statements', None)
+                    if hasattr(self, 'restore_statements'):
+                        del self.restore_statements
+                    self.gosub_stack.append((self.pc, getattr(self, 'next_stmt_idx', 0), True, saved_restore))
+                    self.next_stmt_idx = 0
                     self.pc = self.on_break_line
                     self.interrupts_enabled = False
                     continue
@@ -722,7 +758,11 @@ class Interpreter:
                     for channel, target in list(self.sq_timers.items()):
                         status = self.sound.get_sq_status(channel)
                         if (status & 7) > 0:
-                            self.gosub_stack.append((self.pc, True))
+                            saved_restore = getattr(self, 'restore_statements', None)
+                            if hasattr(self, 'restore_statements'):
+                                del self.restore_statements
+                            self.gosub_stack.append((self.pc, getattr(self, 'next_stmt_idx', 0), True, saved_restore))
+                            self.next_stmt_idx = 0
                             self.pc = target
                             self.interrupts_enabled = False
                             del self.sq_timers[channel]
@@ -733,8 +773,12 @@ class Interpreter:
                     for t_id in range(4):
                         t_info = self.timers.get(t_id)
                         if t_info and current_time >= t_info['next_trigger']:
-                            # Trigger interrupt: save current PC, jump to target line
-                            self.gosub_stack.append((self.pc, True))
+                            # Trigger interrupt: save current PC and statement index, jump to target line
+                            saved_restore = getattr(self, 'restore_statements', None)
+                            if hasattr(self, 'restore_statements'):
+                                del self.restore_statements
+                            self.gosub_stack.append((self.pc, getattr(self, 'next_stmt_idx', 0), True, saved_restore))
+                            self.next_stmt_idx = 0
                             self.pc = t_info['target']
                             self.interrupts_enabled = False # Implicit DI
                             if t_info['type'] == 'EVERY':
@@ -763,27 +807,48 @@ class Interpreter:
                     stmt = statements[stmt_idx]
                     stmt_idx += 1
                     
-                    if is_real_speed:
+                    self.stmts_since_event += 1
+                    if self.stmts_since_event >= 80:
+                        current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                        self.last_time = current_time
+                        if hasattr(self, 'display'):
+                            self.display.process_events()
+                            if getattr(self.display, 'quit_requested', False):
+                                self.running = False
+                                break
+                            if current_time - getattr(self, 'last_update', 0) >= 20:
+                                self.display.update()
+                                self.last_update = current_time
+                                self.stmts_this_frame = 0
+                        self.stmts_since_event = 0
+
+                    s_type = type(stmt).__name__
+                    has_active_timer = any(t is not None for t in self.timers.values())
+                    if is_real_speed or (has_active_timer and s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement')):
                         cost = 1
-                        s_type = type(stmt).__name__
                         if s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement', 'ClsStatement', 'ClgStatement', 'FillStatement', 'SoundStatement'):
-                            cost = 12
+                            cost = 9
                         elif s_type in ('PrintStatement', 'WriteStatement'):
                             cost = 4
                         elif s_type == 'LocateStatement':
                             cost = 2
                         
                         self.stmts_this_frame += cost
-                        if self.stmts_this_frame > statements_limit:
+                        if self.stmts_this_frame >= statements_limit:
+                            if hasattr(self, 'display'):
+                                self.display.process_events()
+                                self.display.update()
                             current_t = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
                             wait_time = 20 - (current_t - getattr(self, 'last_update', 0))
                             if wait_time > 0 and 'pygame' in sys.modules:
                                 pygame.time.wait(wait_time)
+                            self.last_update = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+                            self.last_time = self.last_update
                             self.stmts_this_frame = 0
-                            self.stmts_since_event = 100
+                            self.stmts_since_event = 0
                     
                     if isinstance(stmt, PrintStatement):
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
                         target_stream = 0 if stream == 8 else stream
                         out = []
                         newline = True
@@ -836,18 +901,6 @@ class Interpreter:
 
                         out_str = "".join(out)
 
-                        # Print to terminal for logging
-                        try:
-                            if newline:
-                                print(out_str)
-                            else:
-                                print(out_str, end="", flush=True)
-                        except UnicodeEncodeError:
-                            if newline:
-                                print(out_str.encode('ascii', 'replace').decode('ascii'))
-                            else:
-                                print(out_str.encode('ascii', 'replace').decode('ascii'), end="", flush=True)
-
                         if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
                             self.file_out[9].write(out_str + ("\n" if newline else ""))
 
@@ -862,52 +915,52 @@ class Interpreter:
                             else:
                                 out.append(str(val))
                         out_str = ",".join(out)
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
                         if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
                             self.file_out[9].write(out_str + "\n")
                         else:
                             self.display.print_text(out_str + "\r\n", stream)
 
                     elif isinstance(stmt, LocateStatement):
-                        col = int(self.evaluate(stmt.col))
-                        row = int(self.evaluate(stmt.row)) if getattr(stmt, 'row', None) else None
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                        col = self.cint(self.evaluate(stmt.col))
+                        row = self.cint(self.evaluate(stmt.row)) if getattr(stmt, 'row', None) else None
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
                         if row is not None:
                             self.display.locate(col, row, stream)
                         else:
                             self.display.locate(col, self.display.streams[stream]['text_row'] if hasattr(self.display, 'streams') else self.display.text_row, stream)
                     
                     elif isinstance(stmt, ClsStatement):
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
                         self.display.clear_graphics(stream)
                         self.display.locate(1, 1, stream)
 
                     elif isinstance(stmt, ClgStatement):
                         if stmt.color is not None:
-                            c = int(self.evaluate(stmt.color))
-                            old_paper = getattr(self.display, 'graphics_paper', 0)
+                            c = self.cint(self.evaluate(stmt.color))
                             self.display.set_graphics_paper(c)
-                            if hasattr(self.display, 'clear_graphics_window'):
-                                self.display.clear_graphics_window()
-                            else:
-                                self.display.clear_graphics()
-                            self.display.set_graphics_paper(old_paper)
+                        if hasattr(self.display, 'clear_graphics_window'):
+                            self.display.clear_graphics_window()
                         else:
-                            if hasattr(self.display, 'clear_graphics_window'):
-                                self.display.clear_graphics_window()
-                            else:
-                                self.display.clear_graphics()
+                            self.display.clear_graphics()
+                        self.display.move(0, 0)
 
                     elif isinstance(stmt, BorderStatement):
-                        col1 = int(self.evaluate(stmt.color1))
-                        col2 = int(self.evaluate(stmt.color2)) if stmt.color2 else None
+                        col1 = self.cint(self.evaluate(stmt.color1))
+                        col2 = self.cint(self.evaluate(stmt.color2)) if stmt.color2 else None
                         if hasattr(self.display, 'set_border'):
                             self.display.set_border(col1, col2)
 
                     elif isinstance(stmt, ClearStatement):
                         self.variables.clear()
                         self.arrays.clear()
+                        self.for_loops.clear()
+                        self.for_stack.clear()
                         self.gosub_stack.clear()
+                        if hasattr(self, 'while_stack'):
+                            self.while_stack.clear()
+                        self.data_ptr = 0
+                        self.angle_mode = 'RAD'
 
                     elif isinstance(stmt, ClearInputStatement):
                         if hasattr(self.display, 'clear_input'):
@@ -938,15 +991,15 @@ class Interpreter:
                         if hasattr(self.display, 'tag_active'):
                             self.display.tag_active = False
 
-                    elif isinstance(stmt, (ZoneStatement, SpeedStatement)):
+                    elif isinstance(stmt, ZoneStatement):
                         pass # Stubbed to prevent execution errors
 
                     elif isinstance(stmt, MaskStatement):
                         if stmt.mask is not None:
-                            mask = int(self.evaluate(stmt.mask))
+                            mask = self.cint(self.evaluate(stmt.mask))
                             self.display.set_mask(mask)
                         if stmt.first_point is not None:
-                            first_point = int(self.evaluate(stmt.first_point))
+                            first_point = self.cint(self.evaluate(stmt.first_point))
                             self.display.set_mask_first(first_point)
 
                     elif isinstance(stmt, EraseStatement):
@@ -955,9 +1008,9 @@ class Interpreter:
                                 del self.arrays[var_name]
 
                     elif isinstance(stmt, AfterStatement):
-                        delay = int(self.evaluate(stmt.delay))
-                        timer_id = int(self.evaluate(stmt.timer_id))
-                        target = int(self.evaluate(stmt.line_number))
+                        delay = self.cint(self.evaluate(stmt.delay))
+                        timer_id = self.cint(self.evaluate(stmt.timer_id)) if stmt.timer_id is not None else 0
+                        target = self.cint(self.evaluate(stmt.line_number))
                         if 0 <= timer_id <= 3:
                             delay_ms = delay * 20 # 1/50th of a second
                             current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
@@ -969,9 +1022,9 @@ class Interpreter:
                             }
                         
                     elif isinstance(stmt, EveryStatement):
-                        delay = int(self.evaluate(stmt.ticks))
-                        timer_id = int(self.evaluate(stmt.timer_id))
-                        target = int(self.evaluate(stmt.line_number))
+                        delay = self.cint(self.evaluate(stmt.ticks))
+                        timer_id = self.cint(self.evaluate(stmt.timer_id)) if stmt.timer_id is not None else 0
+                        target = self.cint(self.evaluate(stmt.line_number))
                         if 0 <= timer_id <= 3:
                             delay_ms = delay * 20 # 1/50th of a second
                             current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
@@ -987,9 +1040,9 @@ class Interpreter:
                             val = str(self.evaluate(stmt.expr))
                             target_var = stmt.dims[0].tokens[0].value
                             var_val = str(self.variables.get(target_var, ""))
-                            start = int(self.evaluate(stmt.dims[1]))
+                            start = self.cint(self.evaluate(stmt.dims[1]))
                             if len(stmt.dims) >= 3:
-                                length = int(self.evaluate(stmt.dims[2]))
+                                length = self.cint(self.evaluate(stmt.dims[2]))
                             else:
                                 length = len(val)
                         
@@ -1001,7 +1054,7 @@ class Interpreter:
                             self.variables[target_var] = new_str
                         else:
                             val = self.evaluate(stmt.expr)
-                            dims_eval = tuple(int(self.evaluate(d)) for d in stmt.dims)
+                            dims_eval = tuple(self.cint(self.evaluate(d)) for d in stmt.dims)
                             if stmt.var_name not in self.arrays:
                                 self.arrays[stmt.var_name] = {}
                             self.arrays[stmt.var_name][dims_eval] = self.typecast(stmt.var_name, val)
@@ -1009,7 +1062,7 @@ class Interpreter:
                     elif isinstance(stmt, LetStatement):
                         val = self.evaluate(stmt.expr)
                         if stmt.identifier.startswith('_REG_'):
-                            setattr(self.z80, stmt.identifier[5:], int(val))
+                            setattr(self.z80, stmt.identifier[5:], self.cint(val))
                         else:
                             self.variables[stmt.identifier] = self.typecast(stmt.identifier, val)
                     
@@ -1022,42 +1075,62 @@ class Interpreter:
                         if cond:
                             if not hasattr(self, 'while_stack'):
                                 self.while_stack = []
-                            self.while_stack.append(self.pc)
+                            self.while_stack.append((self.pc, stmt_idx - 1))
                         else:
                             depth = 1
                             found = False
-                            idx = self.line_numbers.index(self.pc)
-                            started = False
-                            while idx < len(self.line_numbers):
-                                line = self.line_numbers[idx]
-                                for s in self.program.lines[line]:
-                                    if s is stmt:
-                                        started = True
-                                        continue
-                                    if not started: continue
-                                    if isinstance(s, WhileStatement): depth += 1
-                                    elif isinstance(s, WendStatement):
-                                        depth -= 1
-                                        if depth == 0:
-                                            next_pc = self.get_next_line(line)
-                                            found = True
-                                            break
-                                if found: break
-                                idx += 1
+                            for s_i in range(stmt_idx, len(statements)):
+                                s = statements[s_i]
+                                if isinstance(s, WhileStatement):
+                                    depth += 1
+                                elif isinstance(s, WendStatement):
+                                    depth -= 1
+                                    if depth == 0:
+                                        stmt_idx = s_i + 1
+                                        found = True
+                                        break
+                            if not found:
+                                idx = self.line_numbers.index(self.pc) + 1
+                                while idx < len(self.line_numbers):
+                                    line = self.line_numbers[idx]
+                                    line_stmts = self.program.lines[line]
+                                    for s_i, s in enumerate(line_stmts):
+                                        if isinstance(s, WhileStatement):
+                                            depth += 1
+                                        elif isinstance(s, WendStatement):
+                                            depth -= 1
+                                            if depth == 0:
+                                                next_pc = line
+                                                self.next_stmt_idx = s_i + 1
+                                                found = True
+                                                break
+                                    if found:
+                                        break
+                                    idx += 1
+                                if found:
+                                    break
 
                     elif isinstance(stmt, WendStatement):
                         if hasattr(self, 'while_stack') and self.while_stack:
-                            loop_pc = self.while_stack.pop()
-                            next_pc = loop_pc
-                            break
+                            loop_target = self.while_stack.pop()
+                            if isinstance(loop_target, tuple):
+                                loop_pc, loop_idx = loop_target
+                            else:
+                                loop_pc, loop_idx = loop_target, 0
+                            if loop_pc == self.pc:
+                                stmt_idx = loop_idx
+                            else:
+                                next_pc = loop_pc
+                                self.next_stmt_idx = loop_idx
+                                break
 
                     elif isinstance(stmt, OnStatement):
-                        val = int(self.evaluate(stmt.expr))
+                        val = self.cint(self.evaluate(stmt.expr))
                         if 1 <= val <= len(stmt.line_numbers):
-                            target = int(self.evaluate(stmt.line_numbers[val - 1]))
+                            target = self.cint(self.evaluate(stmt.line_numbers[val - 1]))
                             if target in self.program.lines:
                                 if stmt.is_gosub:
-                                    self.gosub_stack.append((self.pc, stmt_idx, False))
+                                    self.gosub_stack.append((self.pc, stmt_idx, False, statements))
                                 next_pc = target
                                 break
                             else:
@@ -1065,18 +1138,18 @@ class Interpreter:
                                 break
 
                     elif isinstance(stmt, OnErrorStatement):
-                        self.error_handler_line = int(self.evaluate(stmt.line_number))
+                        self.error_handler_line = self.cint(self.evaluate(stmt.line_number))
                         if self.error_handler_line == 0:
                             self.error_handler_line = 0 # ON ERROR GOTO 0 disables handler
                             
                     elif isinstance(stmt, OnBreakStatement):
                         self.on_break_action = stmt.action
                         if stmt.line_number is not None:
-                            self.on_break_line = int(self.evaluate(stmt.line_number))
+                            self.on_break_line = self.cint(self.evaluate(stmt.line_number))
                     
                     elif isinstance(stmt, OnSqStatement):
-                        channel = int(self.evaluate(stmt.channel)) if stmt.channel else 1
-                        target_line = int(self.evaluate(stmt.line_number))
+                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel else 1
+                        target_line = self.cint(self.evaluate(stmt.line_number))
                         if not hasattr(self, 'sq_timers'):
                             self.sq_timers = {}
                         if target_line == 0:
@@ -1086,7 +1159,7 @@ class Interpreter:
                             self.sq_timers[channel] = target_line
 
                     elif isinstance(stmt, ErrorStatement):
-                        code = int(self.evaluate(stmt.code))
+                        code = self.cint(self.evaluate(stmt.code))
                         next_pc = self.trigger_error(code, self.pc)
                         break
                     
@@ -1094,7 +1167,7 @@ class Interpreter:
                         if stmt.is_next:
                             next_pc = self.get_next_line(self.pc)
                         elif stmt.line_number is not None:
-                            next_pc = int(self.evaluate(stmt.line_number))
+                            next_pc = self.cint(self.evaluate(stmt.line_number))
                         else:
                             next_pc = self.err_line if self.err_line else self.pc
                         break
@@ -1112,24 +1185,33 @@ class Interpreter:
                                 try: addr = int(addr)
                                 except: addr = 0
                         else:
-                            try: addr = int(addr)
+                            try: addr = self.cint(addr)
                             except: addr = 0
 
                         if stmt.params:
                             try:
-                                self.z80.A = int(self.evaluate(stmt.params[0]))
+                                self.z80.A = self.cint(self.evaluate(stmt.params[0]))
                             except Exception:
                                 self.z80.A = len(stmt.params)
                         else:
                             self.z80.A = 0
 
-                        if addr in self.firmware_hooks:
+                        if addr == 0:
+                            self.running = False
+                            break
+                        elif addr in self.firmware_hooks:
                             self.firmware_hooks[addr]()
+                        elif 0 <= addr <= 65530 and self.ram[addr + 3] == 0xC3:
+                            fw_addr = self.ram[addr + 4] | (self.ram[addr + 5] << 8)
+                            if fw_addr in self.firmware_hooks:
+                                self.firmware_hooks[fw_addr]()
+                            else:
+                                print(f"Warning: Unimplemented CALL &{addr:04X}")
                         else:
                             print(f"Warning: Unimplemented CALL &{addr:04X}")
 
                     elif isinstance(stmt, GotoStatement):
-                        target = int(self.evaluate(stmt.line_number))
+                        target = self.cint(self.evaluate(stmt.line_number))
                         if target in self.program.lines:
                             next_pc = target
                             break
@@ -1138,7 +1220,7 @@ class Interpreter:
                             break
                         
                     elif isinstance(stmt, GosubStatement):
-                        target = int(self.evaluate(stmt.line_number))
+                        target = self.cint(self.evaluate(stmt.line_number))
                         if target in self.program.lines:
                             self.gosub_stack.append((self.pc, stmt_idx, False, statements))
                             next_pc = target
@@ -1152,7 +1234,9 @@ class Interpreter:
                             ret_val = self.gosub_stack.pop()
                             if isinstance(ret_val, tuple):
                                 if len(ret_val) == 4:
-                                    next_pc, self.next_stmt_idx, is_interrupt, self.restore_statements = ret_val
+                                    next_pc, self.next_stmt_idx, is_interrupt, restored = ret_val
+                                    if restored is not None:
+                                        self.restore_statements = restored
                                 elif len(ret_val) == 3:
                                     next_pc, self.next_stmt_idx, is_interrupt = ret_val
                                 else:
@@ -1170,13 +1254,13 @@ class Interpreter:
 
                     elif isinstance(stmt, SaveStatement):
                         filename = str(self.evaluate(stmt.filename))
-                        if hasattr(self, 'display'):
-                            self.display.print_text(f"SAVE '{filename}' - Use IDE Editor to save\r\n")
+                        print(f"[DISK] SAVE '{filename}'")
 
                     elif isinstance(stmt, LoadStatement):
                         filename = str(self.evaluate(stmt.filename))
-                        if hasattr(self, 'display'):
-                            self.display.print_text(f"LOAD '{filename}' - Use IDE Editor to load\r\n")
+                        print(f"[DISK] LOAD '{filename}'")
+                        if filename.lower().startswith('!hr'):
+                            self.ram[40000] = 0xC9
 
                     elif isinstance(stmt, EndStatement):
                         self.running = False
@@ -1348,77 +1432,101 @@ class Interpreter:
                         self.variables[var2] = v1
 
                     elif isinstance(stmt, PlotStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
-                        pen = int(self.evaluate(stmt.pen)) if stmt.pen else None
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
+                        pen = self.cint(self.evaluate(stmt.pen)) if stmt.pen else None
+                        if getattr(stmt, 'mode', None) is not None:
+                            mode = self.cint(self.evaluate(stmt.mode))
+                            self.display.set_graphics_write_mode(mode)
                         self.display.plot(x, y, pen)
 
+                    elif isinstance(stmt, PlotrStatement):
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
+                        pen = self.cint(self.evaluate(stmt.pen)) if stmt.pen else None
+                        if getattr(stmt, 'mode', None) is not None:
+                            mode = self.cint(self.evaluate(stmt.mode))
+                            self.display.set_graphics_write_mode(mode)
+                        curr_x = getattr(self.display, 'graphics_x', 0)
+                        curr_y = getattr(self.display, 'graphics_y', 0)
+                        self.display.plot(curr_x + x, curr_y + y, pen)
+
                     elif isinstance(stmt, DrawStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
                         pen = None
                         if stmt.pen:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
-                            mode = int(self.evaluate(stmt.mode))
+                            mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
                         self.display.draw(x, y, pen)
+                        if getattr(self.display, 'graphics_write_mode', 0) in (1, 3) and 'pygame' in sys.modules:
+                            self.display.process_events()
+                            self.display.update()
+                            self.last_update = pygame.time.get_ticks()
+                            pygame.time.wait(20)
 
                     elif isinstance(stmt, DrawrStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
                         pen = None
                         if stmt.pen:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
-                            mode = int(self.evaluate(stmt.mode))
+                            mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
                         # DRAWR logic: relative to current position
                         curr_x = getattr(self.display, 'graphics_x', 0)
                         curr_y = getattr(self.display, 'graphics_y', 0)
                         self.display.draw(curr_x + x, curr_y + y, pen)
+                        if getattr(self.display, 'graphics_write_mode', 0) in (1, 3) and 'pygame' in sys.modules:
+                            self.display.process_events()
+                            self.display.update()
+                            self.last_update = pygame.time.get_ticks()
+                            pygame.time.wait(20)
 
                     elif isinstance(stmt, MoveStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
                         if stmt.pen:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if stmt.mode is not None:
-                            mode = int(self.evaluate(stmt.mode))
+                            mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
                         self.display.move(x, y)
 
                     elif isinstance(stmt, MoverStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
                         if stmt.pen:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
-                            mode = int(self.evaluate(stmt.mode))
+                            mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
                         curr_x = getattr(self.display, 'graphics_x', 0)
                         curr_y = getattr(self.display, 'graphics_y', 0)
                         self.display.move(curr_x + x, curr_y + y)
                     
                     elif isinstance(stmt, OriginStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
+                        x = self.cint(self.evaluate(stmt.x))
+                        y = self.cint(self.evaluate(stmt.y))
                         self.display.origin_x = x
                         self.display.origin_y = y
                         if stmt.left is not None:
-                            left = int(self.evaluate(stmt.left))
-                            right = int(self.evaluate(stmt.right))
-                            top = int(self.evaluate(stmt.top))
-                            bottom = int(self.evaluate(stmt.bottom))
+                            left = self.cint(self.evaluate(stmt.left))
+                            right = self.cint(self.evaluate(stmt.right))
+                            top = self.cint(self.evaluate(stmt.top))
+                            bottom = self.cint(self.evaluate(stmt.bottom))
                             if hasattr(self.display, 'set_graphics_window'):
                                 self.display.set_graphics_window(left, right, top, bottom)
 
                     elif isinstance(stmt, FillStatement):
-                        pen = int(self.evaluate(stmt.pen))
+                        pen = self.cint(self.evaluate(stmt.pen))
                         if hasattr(self.display, 'fill'):
                             self.display.fill(pen)
 
@@ -1518,54 +1626,51 @@ class Interpreter:
                                 if not found:
                                     self.variables[err_var] = -3
                                 else:
-                                    # Wait, does bank_current_record get updated to the next record after BANKFIND?
-                                    # The manual says "Al concluir la operación, la variable r% contiene el número del registro en el que se ha encontrado la cadena"
-                                    # But wait, does it update current record pointer? Yes, it says it starts searching from current, maybe we update it to the found one.
                                     pass
 
                     elif isinstance(stmt, InkStatement):
-                        pen = int(self.evaluate(stmt.pen))
-                        color1 = int(self.evaluate(stmt.color1))
-                        color2 = int(self.evaluate(stmt.color2)) if stmt.color2 else None
+                        pen = self.cint(self.evaluate(stmt.pen))
+                        color1 = self.cint(self.evaluate(stmt.color1))
+                        color2 = self.cint(self.evaluate(stmt.color2)) if stmt.color2 else None
                         self.display.set_ink(pen, color1, color2)
 
                     elif isinstance(stmt, PenStatement):
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
-                        bg_mode = int(self.evaluate(stmt.bg_mode)) if getattr(stmt, 'bg_mode', None) is not None else None
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        bg_mode = self.cint(self.evaluate(stmt.bg_mode)) if getattr(stmt, 'bg_mode', None) is not None else None
                         if stmt.pen is not None:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_pen(pen, stream, bg_mode)
                         elif bg_mode is not None:
                             self.display.set_bg_mode(bg_mode, stream)
 
                     elif isinstance(stmt, PaperStatement):
-                        paper = int(self.evaluate(stmt.paper))
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                        paper = self.cint(self.evaluate(stmt.paper))
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
                         self.display.set_paper(paper, stream)
                     
                     elif type(stmt).__name__ == 'GraphicsPenStatement':
                         if stmt.pen is not None:
-                            pen = int(self.evaluate(stmt.pen))
+                            pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if stmt.bg_mode is not None:
-                            bg_mode = int(self.evaluate(stmt.bg_mode))
+                            bg_mode = self.cint(self.evaluate(stmt.bg_mode))
                             self.display.set_bg_mode(bg_mode)
 
                     elif type(stmt).__name__ == 'GraphicsPaperStatement':
-                        paper = int(self.evaluate(stmt.paper))
+                        paper = self.cint(self.evaluate(stmt.paper))
                         self.display.set_graphics_paper(paper)
 
                     elif isinstance(stmt, KeyStatement):
-                        k_num = int(self.evaluate(stmt.key_num))
+                        k_num = self.cint(self.evaluate(stmt.key_num))
                         k_str = str(self.evaluate(stmt.string_expr))
                         # Macro expansion not physically rendered in this version
                         
                     elif isinstance(stmt, KeyDefStatement):
-                        k_num = int(self.evaluate(stmt.key_num))
-                        k_rep = int(self.evaluate(stmt.repeat))
-                        k_norm = int(self.evaluate(stmt.normal))
-                        k_shift = int(self.evaluate(stmt.shift))
-                        k_ctrl = int(self.evaluate(stmt.control))
+                        k_num = self.cint(self.evaluate(stmt.key_num))
+                        k_rep = self.cint(self.evaluate(stmt.repeat))
+                        k_norm = self.cint(self.evaluate(stmt.normal)) if stmt.normal is not None else None
+                        k_shift = self.cint(self.evaluate(stmt.shift)) if stmt.shift is not None else None
+                        k_ctrl = self.cint(self.evaluate(stmt.control)) if stmt.control is not None else None
                         # Key definition not physically applied in this version
 
                     elif isinstance(stmt, SpeedStatement):
@@ -1575,42 +1680,42 @@ class Interpreter:
                         
                         if target == 'INK':
                             if expr1 is not None:
-                                t1 = int(self.evaluate(expr1))
-                                t2 = int(self.evaluate(expr2)) if expr2 is not None else t1
+                                t1 = self.cint(self.evaluate(expr1))
+                                t2 = self.cint(self.evaluate(expr2)) if expr2 is not None else t1
                                 self.display.set_speed_ink(t1, t2)
                         elif target == 'KEY':
                             if expr1 is not None and expr2 is not None:
-                                t1 = int(self.evaluate(expr1))
-                                t2 = int(self.evaluate(expr2))
+                                t1 = self.cint(self.evaluate(expr1))
+                                t2 = self.cint(self.evaluate(expr2))
                                 self.display.set_speed_key(t1, t2)
                         elif target == 'WRITE':
                             if expr1 is not None:
-                                t1 = int(self.evaluate(expr1))
+                                t1 = self.cint(self.evaluate(expr1))
                                 self.speed_write = t1
 
                     elif isinstance(stmt, EnvStatement):
-                        env_no = int(self.evaluate(stmt.env_no))
-                        sections = [int(self.evaluate(s)) for s in stmt.sections]
+                        env_no = self.cint(self.evaluate(stmt.env_no))
+                        sections = [self.cint(self.evaluate(s)) for s in stmt.sections]
                         self.sound.set_env(env_no, sections)
                     
                     elif isinstance(stmt, EntStatement):
-                        ent_no = int(self.evaluate(stmt.ent_no))
-                        sections = [int(self.evaluate(s)) for s in stmt.sections]
+                        ent_no = self.cint(self.evaluate(stmt.ent_no))
+                        sections = [self.cint(self.evaluate(s)) for s in stmt.sections]
                         self.sound.set_ent(ent_no, sections)
 
                     elif isinstance(stmt, SoundStatement):
-                        channel = int(self.evaluate(stmt.channel)) if stmt.channel else 1
-                        period = int(self.evaluate(stmt.period)) if stmt.period else 0
-                        duration = int(self.evaluate(stmt.duration)) if stmt.duration else 20
-                        volume = int(self.evaluate(stmt.volume)) if stmt.volume else 12
-                        env = int(self.evaluate(stmt.env)) if stmt.env else 0
-                        ent = int(self.evaluate(stmt.ent)) if stmt.ent else 0
-                        noise = int(self.evaluate(stmt.noise)) if stmt.noise else 0
+                        channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel else 1
+                        period = self.cint(self.evaluate(stmt.period)) if stmt.period else 0
+                        duration = self.cint(self.evaluate(stmt.duration)) if stmt.duration else 20
+                        volume = self.cint(self.evaluate(stmt.volume)) if stmt.volume else 12
+                        env = self.cint(self.evaluate(stmt.env)) if stmt.env else 0
+                        ent = self.cint(self.evaluate(stmt.ent)) if stmt.ent else 0
+                        noise = self.cint(self.evaluate(stmt.noise)) if stmt.noise else 0
                         print(f"[AUDIO] SOUND {channel},{period},{duration},{volume}")
                         self.sound.play_sound(channel, period, duration, volume, env, ent, noise)
                     
                     elif isinstance(stmt, ReleaseStatement):
-                        channels = int(self.evaluate(stmt.channels))
+                        channels = self.cint(self.evaluate(stmt.channels))
                         self.sound.release_channels(channels)
                     
                     elif isinstance(stmt, IfStatement):
@@ -1625,11 +1730,12 @@ class Interpreter:
                         step_val = self.evaluate(stmt.step_expr)
                     
                         self.variables[stmt.identifier] = self.typecast(stmt.identifier, start_val)
+                        next_pos = self._find_matching_next(stmt.identifier, self.pc, statements, stmt_idx)
+                        match_next_pos = (next_pos[0], next_pos[1] - 1) if next_pos else None
                         if (step_val > 0 and start_val > end_val) or (step_val < 0 and start_val < end_val):
                             if stmt.identifier in self.for_stack:
                                 self.for_stack.remove(stmt.identifier)
                             self.for_loops.pop(stmt.identifier, None)
-                            next_pos = self._find_matching_next(stmt.identifier, self.pc, statements, stmt_idx)
                             if next_pos:
                                 target_pc, target_idx = next_pos
                                 if target_pc == self.pc:
@@ -1642,9 +1748,12 @@ class Interpreter:
                                 self.trigger_error(26, self.pc)
                                 break
                         else:
-                            self.for_loops[stmt.identifier] = ((self.pc, stmt_idx), end_val, step_val)
                             if stmt.identifier in self.for_stack:
-                                self.for_stack.remove(stmt.identifier)
+                                idx_in_stack = self.for_stack.index(stmt.identifier)
+                                for abandoned_var in self.for_stack[idx_in_stack:]:
+                                    self.for_loops.pop(abandoned_var, None)
+                                self.for_stack = self.for_stack[:idx_in_stack]
+                            self.for_loops[stmt.identifier] = ((self.pc, stmt_idx), end_val, step_val, match_next_pos)
                             self.for_stack.append(stmt.identifier)
                     
                     elif isinstance(stmt, ReadStatement):
@@ -1654,7 +1763,7 @@ class Interpreter:
                                 val = self.evaluate(val_expr)
                                 if isinstance(var, tuple):
                                     var_name, dims = var
-                                    dims_eval = tuple(int(self.evaluate(d)) for d in dims)
+                                    dims_eval = tuple(self.cint(self.evaluate(d)) for d in dims)
                                     if var_name not in self.arrays:
                                         self.arrays[var_name] = {}
                                     self.arrays[var_name][dims_eval] = self.typecast(var_name, val)
@@ -1668,7 +1777,7 @@ class Interpreter:
 
                     elif isinstance(stmt, RestoreStatement):
                         if stmt.line_number is not None:
-                            target_line = int(self.evaluate(stmt.line_number))
+                            target_line = self.cint(self.evaluate(stmt.line_number))
                             found = False
                             for i, (ln, _) in enumerate(self.data_values):
                                 if ln >= target_line:
@@ -1753,7 +1862,7 @@ class Interpreter:
                             del self.file_out[9]
 
                     elif isinstance(stmt, InputStatement):
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
                         if stream == 9 and hasattr(self, 'file_in') and 9 in self.file_in:
                             # read from file
                             val = self.file_in[9].readline()
@@ -1794,7 +1903,7 @@ class Interpreter:
                                     
                                 if is_array:
                                     var_name, dims = var
-                                    dims_eval = tuple(int(self.evaluate(d)) for d in dims)
+                                    dims_eval = tuple(self.cint(self.evaluate(d)) for d in dims)
                                     if var_name not in self.arrays:
                                         self.arrays[var_name] = {}
                                     self.arrays[var_name][dims_eval] = self.typecast(var_name, parsed_val)
@@ -1809,14 +1918,14 @@ class Interpreter:
                             pygame.time.wait(20)
 
                     elif isinstance(stmt, SymbolAfterStatement):
-                        limit = int(self.evaluate(stmt.limit))
+                        limit = self.cint(self.evaluate(stmt.limit))
                         if hasattr(self, 'display') and hasattr(self.display, 'symbol_after'):
                             self.display.symbol_after(limit)
                         self.init_font_ram()
 
                     elif isinstance(stmt, SymbolStatement):
-                        char_code = int(self.evaluate(stmt.char_code))
-                        matrix = [int(self.evaluate(m)) for m in stmt.matrix]
+                        char_code = self.cint(self.evaluate(stmt.char_code))
+                        matrix = [self.cint(self.evaluate(m)) for m in stmt.matrix]
                         while len(matrix) < 8:
                             matrix.append(0)
                         matrix = matrix[:8]
@@ -1828,34 +1937,47 @@ class Interpreter:
                                 self.ram[ram_addr] = b
 
                     elif isinstance(stmt, WindowStatement):
-                        left = int(self.evaluate(stmt.left))
-                        right = int(self.evaluate(stmt.right))
-                        top = int(self.evaluate(stmt.top))
-                        bottom = int(self.evaluate(stmt.bottom))
-                        stream = int(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
+                        left = self.cint(self.evaluate(stmt.left))
+                        right = self.cint(self.evaluate(stmt.right))
+                        top = self.cint(self.evaluate(stmt.top))
+                        bottom = self.cint(self.evaluate(stmt.bottom))
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) else 0
                         if hasattr(self.display, 'set_window'):
                             self.display.set_window(left, right, top, bottom, stream)
 
                     elif isinstance(stmt, PokeStatement):
-                        addr = int(self.evaluate(stmt.address)) & 0xFFFF
-                        val = int(self.evaluate(stmt.value)) & 0xFF
+                        addr = self.cint(self.evaluate(stmt.address)) & 0xFFFF
+                        val = self.cint(self.evaluate(stmt.value)) & 0xFF
                         self.ram[addr] = val
                         if addr >= 0xC000:
                             self.display.poke_video_ram(addr, val)
                         
                     elif isinstance(stmt, NextStatement):
                         identifiers = getattr(stmt, 'identifiers', [stmt.identifier])
+                        curr_next_pos = (self.pc, stmt_idx - 1)
                     
                         next_jump = None
                         for var_name in identifiers:
                             if not var_name and self.for_stack:
-                                var_name = self.for_stack[-1]
+                                matched_var = None
+                                for candidate in reversed(self.for_stack):
+                                    info = self.for_loops.get(candidate)
+                                    if info and len(info) >= 4 and info[3] == curr_next_pos:
+                                        matched_var = candidate
+                                        break
+                                var_name = matched_var if matched_var is not None else self.for_stack[-1]
                             
                             if var_name in self.for_loops:
-                                loop_target, end_val, step_val = self.for_loops[var_name]
+                                if var_name in self.for_stack:
+                                    idx_in_stack = self.for_stack.index(var_name)
+                                    for abandoned_var in self.for_stack[idx_in_stack + 1:]:
+                                        self.for_loops.pop(abandoned_var, None)
+                                    self.for_stack = self.for_stack[:idx_in_stack + 1]
+                                loop_info = self.for_loops[var_name]
+                                loop_target, end_val, step_val = loop_info[0], loop_info[1], loop_info[2]
                                 current_val = self.variables.get(var_name, 0)
                             
-                                next_val = current_val + step_val
+                                next_val = self.typecast(var_name, current_val + step_val)
                                 self.variables[var_name] = next_val
                             
                                 if (step_val > 0 and next_val <= end_val) or (step_val < 0 and next_val >= end_val):

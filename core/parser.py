@@ -125,8 +125,9 @@ class AfterStatement(Statement):
         self.line_number = line_number
 
 class EveryStatement(Statement):
-    def __init__(self, delay, timer_id, line_number):
-        self.delay = delay
+    def __init__(self, ticks, timer_id, line_number):
+        self.ticks = ticks
+        self.delay = ticks
         self.timer_id = timer_id
         self.line_number = line_number
 
@@ -335,12 +336,6 @@ class ReturnStatement(Statement):
 class EraseStatement(Statement):
     def __init__(self, arrays):
         self.arrays = arrays
-
-class EveryStatement(Statement):
-    def __init__(self, ticks, timer_id, line_number):
-        self.ticks = ticks
-        self.timer_id = timer_id
-        self.line_number = line_number
         
 class LetArrayStatement(Statement):
     def __init__(self, var_name, dims, expr):
@@ -529,6 +524,16 @@ class Parser:
         return Program(lines)
 
     def parse_statement(self):
+        if self.current_token.type == KEYWORD and self.current_token.value == 'LET':
+            self.eat(KEYWORD)
+
+        if self.current_token.type == KEYWORD and self.pos + 1 < len(self.tokens) and self.tokens[self.pos + 1].type == SYMBOL and self.tokens[self.pos + 1].value == '=':
+            var_name = self.current_token.value
+            self.eat(KEYWORD)
+            self.eat(SYMBOL) # =
+            expr = self.parse_expression()
+            return LetStatement(var_name, expr)
+
         if self.current_token.type == KEYWORD or (self.current_token.type == SYMBOL and self.current_token.value == '?'):
             if (self.current_token.type == KEYWORD and self.current_token.value in ('PRINT', 'WRITE')) or \
                (self.current_token.type == SYMBOL and self.current_token.value == '?'):
@@ -601,7 +606,7 @@ class Parser:
             elif self.current_token.value == 'EVERY':
                 self.eat(KEYWORD)
                 ticks = self.parse_expression()
-                timer_id = None
+                timer_id = Literal("0", NUMBER)
                 if self.current_token.type == SYMBOL and self.current_token.value == ',':
                     self.eat(SYMBOL)
                     timer_id = self.parse_expression()
@@ -672,7 +677,7 @@ class Parser:
                                     is_num = False
                             
                             if is_num:
-                                if s.upper().startswith('&X') or s.upper().startswith('&B'):
+                                if s.upper().startswith('&X'):
                                     values.append(Literal(s, 'BIN_NUMBER'))
                                 elif s.startswith('&'):
                                     values.append(Literal(s, 'HEX_NUMBER'))
@@ -1175,12 +1180,16 @@ class Parser:
                     k_num = self.parse_expression()
                     self.eat(SYMBOL)
                     k_rep = self.parse_expression()
-                    self.eat(SYMBOL)
-                    k_norm = self.parse_expression()
-                    self.eat(SYMBOL)
-                    k_shift = self.parse_expression()
-                    self.eat(SYMBOL)
-                    k_ctrl = self.parse_expression()
+                    k_norm = k_shift = k_ctrl = None
+                    if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                        self.eat(SYMBOL)
+                        k_norm = self.parse_expression()
+                        if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                            self.eat(SYMBOL)
+                            k_shift = self.parse_expression()
+                            if self.current_token.type == SYMBOL and self.current_token.value == ',':
+                                self.eat(SYMBOL)
+                                k_ctrl = self.parse_expression()
                     return KeyDefStatement(k_num, k_rep, k_norm, k_shift, k_ctrl)
                 else:
                     k_num = self.parse_expression()

@@ -32,20 +32,20 @@
 360 FOR x%=0 TO 639 STEP 4
 370 ox=0:oy=0:oz=0 ' Origen camara
 380 cdx=(x%-320)*0.0020833
-390 inv_dl=1/SQR(cdx*cdx+cdysq)
-400 dx=cdx*inv_dl: dy=cdy*inv_dl: dz=inv_dl
+390 invdl=1/SQR(cdx*cdx+cdysq)
+400 dx=cdx*invdl: dy=cdy*invdl: dz=invdl
 410 GOSUB 10 ' Lanza rayo principal
 420 IF hit%=0 THEN col%=0: GOTO 600 ' Fondo negro
 430 hit1%=hit%: mt1=mt
 440 px=mt1*dx: py=mt1*dy: pz=mt1*dz ' Optimizado: como el origen de camara es 0, no sumamos ox,oy,oz
 450 nx=(px-sx(hit1%))*irs(hit1%): ny=(py-sy(hit1%))*irs(hit1%): nz=(pz-sz(hit1%))*irs(hit1%)
 460 ldx=lx-px: ldy=ly-py: ldz=lz-pz
-470 llen=SQR(ldx*ldx+ldy*ldy+ldz*ldz): inv_llen=1/llen
-480 ndotl=(nx*ldx+ny*ldy+nz*ldz)*inv_llen
+470 llen=SQR(ldx*ldx+ldy*ldy+ldz*ldz): invllen=1/llen
+480 ndotl=(nx*ldx+ny*ldy+nz*ldz)*invllen
 490 IF ndotl<0 THEN ndotl=0
 500 ox=px+nx*eps: oy=py+ny*eps: oz=pz+nz*eps
 510 sdx=dx: sdy=dy: sdz=dz
-520 dx=ldx*inv_llen: dy=ldy*inv_llen: dz=ldz*inv_llen
+520 dx=ldx*invllen: dy=ldy*invllen: dz=ldz*invllen
 530 GOSUB 10 ' Lanza rayo de sombra
 540 IF hit%>0 AND mt<llen THEN ndotl=0
 550 IF ndotl<0.25 THEN col%=hit1%+4 ELSE col%=hit1%

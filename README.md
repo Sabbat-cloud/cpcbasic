@@ -31,7 +31,7 @@ It uses `pygame` for highly accurate audiovisual reproduction, capturing the aes
 
 *(Note: It does not support tokenized binary BASIC files or raw compiled Z80 machine code binaries, as it is a high-level interpreter rather than a cycle-accurate CPU emulator. However, it does intercept standard Amstrad ROM firmware `CALL`s and emulates their behavior natively in Python using the virtual Z80 registers).*
 
-**⚠️ WARNING: This emulator is in an early stage of development. Many features might fail.**
+**⚠️ WARNING: The interpreter is in an early stage of development. While more than 90% of software written in BASIC for the Amstrad should run without issues, some programs may fail. Please keep in mind that, given the limitations of microcomputers from that era, software was often pushed to its absolute limit, and certain "tricks" might lead to unexpected results.**
 
 ## Installation
 
@@ -69,7 +69,7 @@ python main.py mydisk.dsk
 
 ## Complete Examples
 
-Check the `examples/` folder to test the capabilities of the emulator. Some of the over 20 included examples are:
+Check the `examples/` folder to test the capabilities of the emulator. Some of the over 100 included examples are:
 - **`matrix.cpcbas`**: Matrix effect demonstrating the use of colors, random numbers, loops, and procedural sound.
 - **`juego_reflejos.cpcbas`**: A complete game with asynchronous timers (`AFTER`/`EVERY`), volume/tone envelopes, direct keyboard reading (`INKEY`), and complex screen handling.
 - **`demo_colores.cpcbas`**: Border and ink color cycling using logical timers.
@@ -79,6 +79,8 @@ Check the `examples/` folder to test the capabilities of the emulator. Some of t
 - **`sprite.cpcbas`**: Creation of user-defined graphics with `SYMBOL`.
 - **`circulos.cpcbas`, `figura3.cpcbas`, `cuadrados.cpcbas`**: Extensive graphical drawing tests (`PLOT`, `DRAW`, trigonometric math).
 - **`tecnicasproggraficos/`**: Inside `examples/` you will find plenty of examples, including the full listing of all programs from the book *"Técnicas de programación gráfica"* in `examples/tecnicasproggraficos/`.
+- **`WELCOME AMSOFT`**: Inside the `examples/welcome` folder, you will find demonstration programs that showcased the power and versatility of the Amstrad CPC.
+- **`GAMES`**: In the `examples/juegos/` folder, you have a collection of games that push Locomotive BASIC to its limits.
 - **Official Manual Examples**: Thanks to the latest updates in string and math variables, most simple examples from the *Locomotive BASIC User Guide* can be tested directly (for example, by pasting them into `temp_run.cpcbas`) and will work out of the box.
 
 ## Why?

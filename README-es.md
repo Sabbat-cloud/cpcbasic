@@ -31,7 +31,7 @@ Utiliza `pygame` para una reproducción audiovisual de gran fidelidad, capturand
 
 *(Nota: No soporta archivos BASIC binarios tokenizados ni binarios nativos de código máquina Z80 compilados, dado que es un intérprete de alto nivel, no un emulador puro de hardware. Sin embargo, gracias al Z80 fantasma, intercepta llamadas de firmware nativas de Amstrad ROM y emula su respuesta directamente en Python).*
 
-**⚠️ ADVERTENCIA: Este emulador se encuentra en una etapa temprana de desarrollo. Muchas características podrían fallar.**
+**⚠️ ADVERTENCIA: El interprete se encuentra en una etapa temprana de desarrollo. Aunque deberian funcionar sin problmas mas del 90% del software escrito en basic para Amstrad. Es posible que fallen algunos pocos. Ten en cuenta que dada las limitaciones que tenian los microordenadores en esa epoca, se exprimio el sofware al maximo y algunos "trucos" podrian causar resultados no deseados.**
 
 
 ## Instalación
@@ -70,7 +70,7 @@ python main.py midisco.dsk
 
 ## Ejemplos Completos
 
-Revisa la carpeta `examples/` para probar las capacidades del emulador. Algunos de los más de 20 ejemplos incluidos son:
+Revisa la carpeta `examples/` para probar las capacidades del emulador. Algunos de los más de 100 ejemplos incluidos son:
 - **`matrix.cpcbas`**: Efecto Matrix que demuestra el uso de colores, números aleatorios, bucles y sonido procedural.
 - **`juego_reflejos.cpcbas`**: Un juego completo con temporizadores asíncronos (`AFTER`/`EVERY`), envolventes de volumen/tono, lectura física del teclado (`INKEY`) y manejo complejo de pantalla.
 - **`demo_colores.cpcbas`**: Intercambio de colores de bordes y tintas usando temporizadores lógicos.
@@ -79,6 +79,8 @@ Revisa la carpeta `examples/` para probar las capacidades del emulador. Algunos 
 - **`movimiento.cpcbas` y `teclado.cpcbas`**: Demos gráficas interactuando con el búfer de teclado en tiempo real.
 - **`sprite.cpcbas`**: Creación de gráficos definidos por el usuario con `SYMBOL`.
 - **`circulos.cpcbas`, `figura3.cpcbas`, `cuadrados.cpcbas`**: Extensas pruebas gráficas de dibujo (`PLOT`, `DRAW`, matemáticas trigonométricas).
+- **`WELCOME AMSOFT`**: Dentro de la carpeta `examples/welcome` encontraras los programas de presentación que mostraban la potencia y versatilidad del Amstrad CPC.
+- **`JUEGOS**: En la carpeta `examples/juegos/` tienes una coleccion de juegos que exprimen el Locomotive Basic. 
 - **`tecnicasproggraficos/`**: Dentro de `examples/` tenéis multitud de ejemplos, incluido el listado completo con todos los ejemplos del libro *"Técnicas de programación gráfica"* en `examples/tecnicasproggraficos/`.
 - **Ejemplos del Manual Oficial**: Gracias a las últimas actualizaciones en variables de cadena y matemáticas, la mayoría de los ejemplos sencillos del *Manual de Usuario de Locomotive BASIC* pueden probarse directamente (por ejemplo, pegándolos en `temp_run.cpcbas`) y funcionarán a la primera.
 
