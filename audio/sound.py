@@ -87,6 +87,7 @@ class SoundEngine:
         self.channel_held = {0: False, 1: False, 2: False}
         self.global_held = False
         self.sq_events_armed = {0: False, 1: False, 2: False}
+        self.sq_events_pending = {0: False, 1: False, 2: False}
         self.psg_registers[7] = 0x3F
         for r in (8, 9, 10):
             self.psg_registers[r] = 0
@@ -107,8 +108,8 @@ class SoundEngine:
         grouped = []
         for i in range(0, min(len(sections), 15), 3):
             chunk = list(sections[i:i + 3])
-            while len(chunk) < 3:
-                chunk.append(0)
+            if len(chunk) < 3:
+                break
             grouped.append(chunk)
         self.envelopes_vol[env_no] = grouped
         return True
@@ -122,8 +123,8 @@ class SoundEngine:
         grouped = []
         for i in range(0, min(len(sections), 15), 3):
             chunk = list(sections[i:i + 3])
-            while len(chunk) < 3:
-                chunk.append(0)
+            if len(chunk) < 3:
+                break
             grouped.append(chunk)
         self.envelopes_tone[actual_no] = {
             'sections': grouped,
@@ -189,7 +190,7 @@ class SoundEngine:
         Devuelve (total_ticks, tick_vols, hw_segments).
         Cada elemento de hw_segments es (start_tick, end_tick, trigger_tick, shape, hw_period).
         """
-        default_sections = [[1, 0, 200]]
+        default_sections = [[1, 0, 0]]
         env_sections = self.envelopes_vol.get(env) if (env > 0 and self.envelopes_vol.get(env)) else None
         curr_sections = env_sections if env_sections else default_sections
 
@@ -242,15 +243,15 @@ class SoundEngine:
             pause_time = int(pause_time) & 0xFF
 
             if steps == 0:
-                # Sección de volumen absoluto (0, abs_vol, pause_time)
-                vol_reg = min(15, max(0, step_size))
+                # Sección de volumen absoluto (0, abs_vol, pause_time) -> sound.asm línea 881
+                vol_reg = step_size & 0x0F
                 e = 0
             else:
-                # Sección de volumen relativo (steps > 0, step_size, pause_time)
+                # Sección de volumen relativo (steps > 0, step_size, pause_time) -> sound.asm líneas 847-851
                 e -= 1
                 if step_size != 0 or (vol_reg & 0x80) != 0:
-                    # En CPC BASIC las envolventes limitan la amplitud en los topes [0..15]
-                    vol_reg = min(15, max(0, (vol_reg & 0x0F) + step_size))
+                    # En sound.asm línea 848 (add a,c : and $0f) y manual pág. 352: envolvente circular módulo 16
+                    vol_reg = ((vol_reg & 0x0F) + step_size) & 0x0F
                 # Si step_size == 0 y bit 7 == 0 (ej. tras envolvente hardware 0x10), conserva vol_reg
 
             pause_csec = 256 if pause_time == 0 else pause_time
@@ -393,9 +394,25 @@ class SoundEngine:
 
         # 2. Expandir periodos y generar onda cuadrada de tono con fase continua
         expanded_periods = np.repeat(tick_periods, self.samples_per_tick)
-        # En sound.asm línea 637: si period == 0, se salta set_tone_and_get_tone_envelope y no hay tono
-        tone_enabled = (period > 0)
+        # En sound.asm líneas 629-643: si period != 0 o ent != 0, se activa set_tone_and_get_tone_envelope
+        ent_idx = abs(int(ent))
+        tone_enabled = (period > 0) or (ent_idx > 0)
         noise_enabled = (noise > 0)
+
+        # Actualizar espejo de registros del AY-3-8912
+        self.psg_registers[c_id * 2] = int(period) & 0xFF
+        self.psg_registers[c_id * 2 + 1] = (int(period) >> 8) & 0x0F
+        if noise_enabled:
+            self.psg_registers[6] = int(noise) & 0x1F
+        self.psg_registers[8 + c_id] = int(volume) & 0x0F
+        if tone_enabled:
+            self.psg_registers[7] &= ~(1 << c_id)
+        else:
+            self.psg_registers[7] |= (1 << c_id)
+        if noise_enabled:
+            self.psg_registers[7] &= ~(1 << (c_id + 3))
+        else:
+            self.psg_registers[7] |= (1 << (c_id + 3))
 
         # En sound.asm líneas 996-1004: si ni tono ni ruido están activos, el canal se silencia
         if not tone_enabled and not noise_enabled:
@@ -455,7 +472,8 @@ class SoundEngine:
 
         target_mask = int(channel_status) & 7
         if target_mask == 0:
-            return False
+            # sound.asm líneas 334-335: and $07 : scf : ret z
+            return True
 
         flush = bool(channel_status & 128)
         hold_flag = bool(channel_status & 64)
@@ -523,6 +541,8 @@ class SoundEngine:
         self.channel_queues[c_id].clear()
         self.channel_status_byte[c_id] = 0
         self.channel_held[c_id] = False
+        self.sq_events_armed[c_id] = False
+        self.sq_events_pending[c_id] = False
 
     def _start_head_item(self, c_id):
         """Extrae el elemento en la cabeza de la cola de c_id y comienza su reproducción (_process_queue_item_15)."""
@@ -610,7 +630,14 @@ class SoundEngine:
                                 self.channel_queues[member_id][0]['rendezvous'] = 0
                             self._start_head_item(member_id)
 
-        # Paso 4: Asegurar que si un canal está reproduciendo y el siguiente item en cola
+        # Paso 4: Si algún canal tenía evento ON SQ armado y ahora tiene hueco libre (< 4 en cola),
+        # disparar evento síncrono (_process_queue_item_53 en sound.asm líneas 676-684)
+        for c_id in range(3):
+            if self.sq_events_armed.get(c_id, False) and len(self.channel_queues[c_id]) < 4:
+                self.sq_events_armed[c_id] = False
+                self.sq_events_pending[c_id] = True
+
+        # Paso 5: Asegurar que si un canal está reproduciendo y el siguiente item en cola
         # es normal (sin hold ni rendezvous), esté pre-encolado en Pygame para transición gapless
         for c_id in range(3):
             if self.channel_status_byte[c_id] == 16 and self.channel_queues[c_id]:
@@ -622,7 +649,7 @@ class SoundEngine:
                         nxt['prequeued'] = True
 
     def release_channels(self, channels):
-        """SOUND RELEASE (&BCB3): Libera canales en estado Hold y reanuda sonido."""
+        """SOUND RELEASE (&BCB3): Libera canales actualmente en estado Hold (cabeza de cola) y reanuda sonido."""
         if self.global_held:
             self.continue_all()
         mask = int(channels) & 7
@@ -631,8 +658,6 @@ class SoundEngine:
                 if self.channel_status_byte[c_id] == 8 or self.channel_held.get(c_id, False):
                     self.channel_status_byte[c_id] = 0
                     self.channel_held[c_id] = False
-                for item in self.channel_queues[c_id]:
-                    item['hold'] = False
         self.update_queues()
 
     def hold_all(self):
@@ -658,7 +683,31 @@ class SoundEngine:
         val = int(val) & 0xFF
         self.psg_registers[reg] = val
 
-    def get_sq_status(self, channel):
+    def arm_sq_event(self, channel):
+        """SOUND ARM EVENT (&BCB0, sound.asm líneas 544-576):
+        Si la cola del canal tiene al menos 1 hueco libre, dispara el evento inmediatamente
+        (sq_events_pending = True) y deja sq_events_armed = False.
+        Si la cola está llena (0 huecos libres), arma sq_events_armed = True para cuando quede un hueco.
+        """
+        self.update_queues()
+        c_id = 0
+        if channel & 1:
+            c_id = 0
+        elif channel & 2:
+            c_id = 1
+        elif channel & 4:
+            c_id = 2
+        else:
+            return
+
+        self.sq_events_armed[c_id] = False
+        free = max(0, 4 - len(self.channel_queues[c_id]))
+        if free > 0:
+            self.sq_events_pending[c_id] = True
+        else:
+            self.sq_events_armed[c_id] = True
+
+    def get_sq_status(self, channel, disarm=True):
         """SOUND CHECK (&BCAD) / Función BASIC SQ(channel):
         channel: 1 (A), 2 (B), 4 (C).
         Bits 0..2: Huecos libres en la cola de espera (0..4)
@@ -675,6 +724,10 @@ class SoundEngine:
             c_id = 1
         elif channel & 4:
             c_id = 2
+
+        if disarm:
+            # sound.asm línea 517: SOUND CHECK desarma el evento ON SQ del canal consultado
+            self.sq_events_armed[c_id] = False
 
         free = max(0, 4 - len(self.channel_queues[c_id]))
         status = (free & 7) | ((self.channel_status_byte[c_id] & 0x1F) << 3)

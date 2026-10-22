@@ -11,7 +11,17 @@ class DSKManager:
     """
     def __init__(self, filename):
         self.filename = filename
-        self.dsk_tool = os.path.join("assets", "AmstradDSKExplorer-master", "DSKInfoV3.py")
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        candidates = [
+            os.path.join(base_dir, "assets", "AmstradDSKExplorer-master", "DSKInfoV3.py"),
+            os.path.join(base_dir, "assets", "AmstradDSKExplorer-master", "DISInfoV3.py"),
+            os.path.join(base_dir, "assets", "AmstradDSKExplorer", "DSKInfoV3.py"),
+            os.path.join(base_dir, "assets", "AmstradDSKExplorer", "DISInfoV3.py"),
+            os.path.join(base_dir, "assets", "DSKInfoV3.py"),
+            os.path.join(base_dir, "assets", "DISInfoV3.py"),
+            os.path.join("assets", "AmstradDSKExplorer-master", "DSKInfoV3.py"),
+        ]
+        self.dsk_tool = next((p for p in candidates if os.path.exists(p)), candidates[0])
         self.mounted = False
         self.temp_dir = None
         

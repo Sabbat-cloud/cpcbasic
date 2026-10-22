@@ -93,7 +93,7 @@ class Display:
         except Exception:
             self.font = pygame.font.SysFont('courier', 16, bold=True)
             
-        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False} for i in range(8)}
         self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
         
         self.key_buffer = []
@@ -135,7 +135,7 @@ class Display:
         self.current_paper = 0
         self.graphics_pen = 1
         self.graphics_paper = 0
-        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
+        self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False} for i in range(8)}
         self.user_symbols = CPC_FONT.copy()
         self.symbol_after_limit = 240
         self.set_mode(1)
@@ -152,6 +152,7 @@ class Display:
             self.bg_mode = 0
             self.graphics_write_mode = 0
             self.line_mask = 255
+            self.mask_bit_idx = 7
             self.mask_first = 1
             self.esc_state = 0
             self.esc_cmd = ''
@@ -175,7 +176,8 @@ class Display:
                     'pen': pen,
                     'transparent': False,
                     'cursor_sys': 0,
-                    'cursor_user': 1
+                    'cursor_user': 1,
+                    'tag': False
                 }
             self.text_buffer = [[' ' for _ in range(80)] for _ in range(25)]
             self._update_palette(False)
@@ -224,6 +226,12 @@ class Display:
     def set_graphics_paper(self, paper):
         if 0 <= paper < 16:
             self.graphics_paper = paper
+
+    def set_tag(self, active, stream=0):
+        if hasattr(self, 'streams') and stream in self.streams:
+            self.streams[stream]['tag'] = bool(active)
+        if stream == 0:
+            self.tag_active = bool(active)
 
     def poke_video_ram(self, addr, val):
         offset = addr - 0xC000
@@ -309,16 +317,17 @@ class Display:
 
     def set_bg_mode(self, mode, stream=None):
         if mode in (0, 1):
-            self.bg_mode = mode
-            if stream is not None and hasattr(self, 'streams') and stream in self.streams:
-                self.streams[stream]['transparent'] = (mode == 1)
-            elif stream is None and hasattr(self, 'streams'):
-                self.transparent_text = (mode == 1)
-                for s in self.streams.values():
-                    s['transparent'] = (mode == 1)
+            if stream is None:
+                self.bg_mode = mode
+            else:
+                if hasattr(self, 'streams') and stream in self.streams:
+                    self.streams[stream]['transparent'] = (mode == 1)
+                if stream == 0:
+                    self.transparent_text = (mode == 1)
 
     def set_mask(self, mask):
         self.line_mask = mask & 255
+        self.mask_bit_idx = 7
 
     def set_mask_first(self, first):
         self.mask_first = 1 if first else 0
@@ -385,14 +394,26 @@ class Display:
                 self.text_buffer[top - 1][c] = ' '
 
     def set_window(self, left, right, top, bottom, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
-        self.streams[stream]['text_window'] = (left, right, top, bottom)
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False}
+        max_cols = self.get_max_cols()
+        left = max(1, min(max_cols, int(left)))
+        right = max(1, min(max_cols, int(right)))
+        if left > right:
+            left, right = right, left
+        top = max(1, min(25, int(top)))
+        bottom = max(1, min(25, int(bottom)))
+        if top > bottom:
+            top, bottom = bottom, top
+        if left == 1 and right == max_cols and top == 1 and bottom == 25:
+            self.streams[stream]['text_window'] = None
+        else:
+            self.streams[stream]['text_window'] = (left, right, top, bottom)
         self.locate(1, 1, stream)
 
     def set_cursor(self, system_switch=None, user_switch=None, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False}
         if system_switch is not None:
             self.streams[stream]['cursor_sys'] = 1 if system_switch != 0 else 0
         if user_switch is not None:
@@ -420,7 +441,50 @@ class Display:
                     
         self.locate(1, 1, stream)
 
+    def _validate_cursor(self, stream=0):
+        left, right, top, bottom = self.get_text_window(stream)
+        win_cols = right - left + 1
+        win_rows = bottom - top + 1
+        col = self.streams[stream]['text_col']
+        row = self.streams[stream]['text_row']
+        if col > win_cols:
+            col = 1
+            row += 1
+        elif col < 1:
+            col = win_cols
+            row -= 1
+        if row < 1:
+            self.scroll_window_down(stream)
+            row = 1
+        elif row > win_rows:
+            self.scroll_window_up(stream)
+            row = win_rows
+        self.streams[stream]['text_col'] = col
+        self.streams[stream]['text_row'] = row
+
+    def _get_validated_cursor(self, stream=0):
+        s = int(stream)
+        if hasattr(self, 'streams') and s in self.streams:
+            left, right, top, bottom = self.get_text_window(s)
+            win_cols = right - left + 1
+            win_rows = bottom - top + 1
+            col = self.streams[s]['text_col']
+            row = self.streams[s]['text_row']
+            if col > win_cols:
+                col = 1
+                row += 1
+            elif col < 1:
+                col = win_cols
+                row -= 1
+            if row < 1:
+                row = 1
+            elif row > win_rows:
+                row = win_rows
+            return col, row
+        return 1, 1
+
     def copychr(self, stream=0):
+        self._validate_cursor(stream)
         left, right, top, bottom = self.get_text_window(stream)
         abs_col = left + self.streams[stream]["text_col"] - 1
         abs_row = top + self.streams[stream]["text_row"] - 1
@@ -429,8 +493,8 @@ class Display:
         return ' '
         
     def locate(self, col, row, stream=0):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1} for i in range(8)}
-        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False} for i in range(8)}
+        if stream not in self.streams: self.streams[stream] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'cursor_sys': 0, 'cursor_user': 1, 'tag': False}
         self.streams[stream]['text_col'] = col
         self.streams[stream]['text_row'] = row
 
@@ -440,8 +504,8 @@ class Display:
 
     @text_col.setter
     def text_col(self, val):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
-        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'tag': False} for i in range(8)}
+        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'tag': False}
         self.streams[0]['text_col'] = val
 
     @property
@@ -450,28 +514,22 @@ class Display:
 
     @text_row.setter
     def text_row(self, val):
-        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False} for i in range(8)}
-        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False}
+        if not hasattr(self, 'streams'): self.streams = {i: {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': 0, 'pen': 1, 'transparent': False, 'tag': False} for i in range(8)}
+        if 0 not in self.streams: self.streams[0] = {'text_col': 1, 'text_row': 1, 'text_window': None, 'paper': self.current_paper, 'pen': self.current_pen, 'transparent': False, 'tag': False}
         self.streams[0]['text_row'] = val
 
     def get_pos(self, stream=0):
         try:
-            s = int(stream)
-            if hasattr(self, 'streams') and s in self.streams:
-                left, right, top, bottom = self.get_text_window(s)
-                win_cols = right - left + 1
-                return max(1, min(win_cols, self.streams[s]['text_col']))
+            col, _ = self._get_validated_cursor(stream)
+            return col
         except (ValueError, TypeError):
             pass
         return 1
 
     def get_vpos(self, stream=0):
         try:
-            s = int(stream)
-            if hasattr(self, 'streams') and s in self.streams:
-                left, right, top, bottom = self.get_text_window(s)
-                win_rows = bottom - top + 1
-                return max(1, min(win_rows, self.streams[s]['text_row']))
+            _, row = self._get_validated_cursor(stream)
+            return row
         except (ValueError, TypeError):
             pass
         return 1
@@ -568,11 +626,16 @@ class Display:
         win_cols = right - left + 1
         win_rows = bottom - top + 1
         
+        if hasattr(self, 'streams') and stream in self.streams and 'tag' in self.streams[stream]:
+            is_tag = self.streams[stream]['tag'] if stream != 0 else (self.streams[0]['tag'] or self.tag_active)
+        else:
+            is_tag = self.tag_active if stream == 0 else False
+        
         for char in str(text):
             char_code = ord(char)
             
-            is_literal = False
-            if self.esc_state > 0:
+            is_literal = is_tag
+            if not is_tag and self.esc_state > 0:
                 # We reuse esc_state for multi-byte VDU commands
                 if self.esc_state == 1:
                     is_literal = True
@@ -601,61 +664,37 @@ class Display:
                 if char_code == 1:
                     self.esc_state = 1
                     continue
-                elif char_code == 7: # BEL
+                elif char_code == 7: # BEL (6128ROM.asm líneas 4966-4986: SOUND &87, 90, 20, 11, 0, 0, 0)
+                    if hasattr(self, 'sound') and self.sound is not None:
+                        self.sound.play_sound(0x87, 90, 20, 11, 0, 0, 0, blocking=False)
                     continue
                 elif char_code == 8: # BS (Left)
-                    if self.tag_active:
-                        self.graphics_x -= char_width
-                    else:
-                        self.streams[stream]["text_col"] -= 1
-                        if self.streams[stream]["text_col"] < 1:
-                            self.streams[stream]["text_col"] = win_cols
-                            if self.streams[stream]["text_row"] < 1:
-                                self.scroll_window_down(stream)
-                                self.streams[stream]["text_row"] = 0
-                            else:
-                                self.streams[stream]["text_row"] -= 1
+                    self._validate_cursor(stream)
+                    self.streams[stream]["text_col"] -= 1
                 elif char_code == 9: # TAB (Right)
-                    if self.tag_active:
-                        self.graphics_x += char_width
-                    else:
-                        self.streams[stream]["text_col"] += 1
-                        if self.streams[stream]["text_col"] > win_cols:
-                            self.streams[stream]["text_col"] = 1
-                            if self.streams[stream]["text_row"] > win_rows:
-                                self.scroll_window_up(stream)
-                                self.streams[stream]["text_row"] = win_rows + 1
-                            else:
-                                self.streams[stream]["text_row"] += 1
+                    self._validate_cursor(stream)
+                    self.streams[stream]["text_col"] += 1
                 elif char_code == 10: # LF (Down)
-                    if self.tag_active:
-                        self.graphics_y -= char_height
-                    else:
-                        if self.streams[stream]["text_row"] > win_rows:
-                            self.scroll_window_up(stream)
-                            self.streams[stream]["text_row"] = win_rows + 1
-                        else:
-                            self.streams[stream]["text_row"] += 1
+                    self._validate_cursor(stream)
+                    self.streams[stream]["text_row"] += 1
                 elif char_code == 11: # VT (Up)
-                    if self.tag_active:
-                        self.graphics_y += char_height
-                    else:
-                        if self.streams[stream]["text_row"] < 1:
-                            self.scroll_window_down(stream)
-                            self.streams[stream]["text_row"] = 0
-                        else:
-                            self.streams[stream]["text_row"] -= 1
+                    self._validate_cursor(stream)
+                    self.streams[stream]["text_row"] -= 1
                 elif char_code == 12: # FF (Clear Window)
                     self.clear_graphics(stream) # Text clear
                 elif char_code == 13: # CR (Left edge)
-                    if self.tag_active:
-                        self.graphics_x = 0
-                    else:
-                        self.streams[stream]["text_col"] = 1
+                    self._validate_cursor(stream)
+                    self.streams[stream]["text_col"] = 1
                 elif char_code == 14: # Set Paper
                     self.esc_state = 14
                 elif char_code == 15: # Set Pen
                     self.esc_state = 15
+                elif char_code == 16: # DLE (Clear character under cursor)
+                    self._validate_cursor(stream)
+                    self._clear_area(self.streams[stream]["text_col"], self.streams[stream]["text_col"], self.streams[stream]["text_row"], self.streams[stream]["text_row"], stream)
+                elif char_code == 17: # DC1 (Clear from start of line to cursor)
+                    self._validate_cursor(stream)
+                    self._clear_to_start_of_line(win_cols, stream)
                 elif char_code == 22: # Set Transparent mode
                     self.esc_state = 22
                 elif char_code == 23: # Graphics Write Mode
@@ -668,26 +707,26 @@ class Display:
                     else:
                         tmp = self.current_pen; self.current_pen = self.current_paper; self.current_paper = tmp
                 elif char_code == 18: # Clear to End of Line
-                    if not self.tag_active:
-                        self._clear_to_end_of_line(win_cols, stream)
+                    self._validate_cursor(stream)
+                    self._clear_to_end_of_line(win_cols, stream)
+                elif char_code == 19: # DC3 (Clear to start of window)
+                    self._validate_cursor(stream)
+                    self._clear_to_start_of_screen(win_cols, win_rows, stream)
+                elif char_code == 20: # DC4 (Clear to end of window)
+                    self._validate_cursor(stream)
+                    self._clear_to_end_of_screen(win_cols, win_rows, stream)
+                elif char_code == 30: # RS (Home cursor)
+                    self.locate(1, 1, stream)
                 elif char_code == 31: # US (Locate)
                     self.esc_state = 31
                     self.esc_args = []
                 # Rest of control codes ignored
                 continue
             else:
-                if not self.tag_active:
-                    if self.streams[stream]["text_col"] > win_cols:
-                        self.streams[stream]["text_col"] = 1
-                        self.streams[stream]["text_row"] += 1
-                    if self.streams[stream]["text_row"] > win_rows:
-                        self.scroll_window_up(stream)
-                        self.streams[stream]["text_row"] = win_rows
-                    elif self.streams[stream]["text_row"] < 1:
-                        self.scroll_window_down(stream)
-                        self.streams[stream]["text_row"] = 1
+                if not is_tag:
+                    self._validate_cursor(stream)
 
-                if self.tag_active:
+                if is_tag:
                     x, y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
                 else:
                     abs_col = left + self.streams[stream]["text_col"] - 1
@@ -723,7 +762,7 @@ class Display:
                     except pygame.error:
                         pass
                 
-                if self.tag_active:
+                if is_tag:
                     active_pen = self.graphics_pen
                     active_paper = self.graphics_paper
                     is_transparent = (self.bg_mode == 1)
@@ -734,7 +773,7 @@ class Display:
 
                 if char_surface is not None:
                     old_clip = self.logical_surface.get_clip()
-                    if self.tag_active and hasattr(self, 'graphics_clip_rect'):
+                    if is_tag and hasattr(self, 'graphics_clip_rect'):
                         self.logical_surface.set_clip(self.graphics_clip_rect)
 
                     for cy in range(char_height):
@@ -750,7 +789,7 @@ class Display:
                                     plot_pen = active_paper
                                 
                                 if plot_pen is not None:
-                                    if self.tag_active and self.graphics_write_mode != 0:
+                                    if is_tag and self.graphics_write_mode != 0:
                                         curr = self.logical_surface.get_at_mapped((px_x, px_y))
                                         if self.graphics_write_mode == 1:
                                             new_pen = curr ^ plot_pen
@@ -764,10 +803,10 @@ class Display:
                                     else:
                                         pygame.draw.rect(self.logical_surface, plot_pen, pygame.Rect(px_x, px_y, 1, 1))
 
-                    if self.tag_active and hasattr(self, 'graphics_clip_rect'):
+                    if is_tag and hasattr(self, 'graphics_clip_rect'):
                         self.logical_surface.set_clip(old_clip)
                 
-                if self.tag_active:
+                if is_tag:
                     self.graphics_x += char_width
                 else:
                     if 0 <= abs_row - 1 < 25 and 0 <= abs_col - 1 < 80:
@@ -832,6 +871,8 @@ class Display:
     def plot(self, x, y, pen=None):
         if pen is None:
             pen = self.graphics_pen
+        else:
+            self.set_graphics_pen(pen)
         self.move(x, y)
         sx, sy = self._cpc_to_screen(x, y)
         
@@ -876,28 +917,30 @@ class Display:
         elif self.mode == 1: width = 2
         else: width = 1
         
-        if False:
-            pass
-        else:
-            dx_steps = abs(end_x - start_x) // width
-            dy_steps = abs(end_y - start_y) // 2
-            sx = width if start_x < end_x else -width
-            sy = 2 if start_y < end_y else -2
-            err = dx_steps - dy_steps
-            
-            cx, cy = start_x, start_y
-            bit_idx = 7
-            first = True
-            
-            while True:
-                draw_dot = False
-                if first:
-                    draw_dot = (self.mask_first == 1)
-                    first = False
-                else:
-                    draw_dot = (self.line_mask & (1 << bit_idx)) != 0
-                    bit_idx = (bit_idx - 1) % 8
+        dx_steps = abs(end_x - start_x) // width
+        dy_steps = abs(end_y - start_y) // 2
+        if hasattr(self, 'interpreter') and getattr(self.interpreter, 'speed', 'unlimited') == 'real':
+            steps = max(dx_steps, dy_steps)
+            step_cost = 190 if self.mode == 0 else (310 if self.mode == 1 else 240)
+            self.interpreter.consume_time_us(steps * step_cost)
+        sx = width if start_x < end_x else -width
+        sy = 2 if start_y < end_y else -2
+        err = dx_steps - dy_steps
+        
+        cx, cy = start_x, start_y
+        bit_idx = getattr(self, 'mask_bit_idx', 7)
+        first = True
+        
+        while True:
+            skip_point = False
+            if first:
+                first = False
+                if self.mask_first == 0:
+                    skip_point = True
                     
+            if not skip_point:
+                draw_dot = (self.line_mask & (1 << bit_idx)) != 0
+                bit_idx = (bit_idx - 1) % 8
                 
                 if draw_dot:
                     rect = pygame.Rect(cx, cy, width, 2)
@@ -921,32 +964,45 @@ class Display:
                 elif self.bg_mode == 0:
                     rect = pygame.Rect(cx, cy, width, 2)
                     pygame.draw.rect(self.logical_surface, self.graphics_paper, rect)
-                    
-                if cx == end_x and cy == end_y:
-                    break
-                e2 = 2 * err
-                if e2 > -dy_steps:
-                    err -= dy_steps
-                    cx += sx
-                if e2 < dx_steps:
-                    err += dx_steps
-                    cy += sy
-                    
+                
+            if cx == end_x and cy == end_y:
+                break
+            e2 = 2 * err
+            if e2 > -dy_steps:
+                err -= dy_steps
+                cx += sx
+            if e2 < dx_steps:
+                err += dx_steps
+                cy += sy
+                
+        self.mask_bit_idx = bit_idx
         self.logical_surface.set_clip(old_clip)
         self.move(x, y)
 
     def fill(self, pen=None):
         if pen is None:
-            pen = self.current_pen
+            pen = self.graphics_pen
+        num_pens = 16 if self.mode == 0 else (4 if self.mode == 1 else 2)
+        fill_pen = pen % num_pens
+        edge_pen = self.graphics_pen % num_pens
+        boundary_pens = {fill_pen, edge_pen}
+
         old_clip = self.logical_surface.get_clip()
-        if hasattr(self, 'graphics_clip_rect'):
-            self.logical_surface.set_clip(self.graphics_clip_rect)
+        clip_rect = getattr(self, 'graphics_clip_rect', None)
+        if clip_rect is not None:
+            self.logical_surface.set_clip(clip_rect)
+            bound_rect = clip_rect.clip(self.logical_surface.get_rect())
+        else:
+            bound_rect = self.logical_surface.get_rect()
+
         start_x, start_y = self._cpc_to_screen(self.graphics_x, self.graphics_y)
-        if start_x < 0 or start_x >= self.logical_width or start_y < 0 or start_y >= self.logical_height:
+        if not bound_rect.collidepoint(start_x, start_y):
+            self.logical_surface.set_clip(old_clip)
             return
             
-        target_pen = self.logical_surface.get_at_mapped((start_x, start_y))
-        if target_pen == pen:
+        start_curr = self.logical_surface.get_at_mapped((start_x, start_y)) % num_pens
+        if start_curr in boundary_pens:
+            self.logical_surface.set_clip(old_clip)
             return
             
         queue = [(start_x, start_y)]
@@ -963,21 +1019,29 @@ class Display:
             x, y = queue.pop(0)
             if (x, y) in visited: continue
             visited.add((x, y))
+            if not bound_rect.collidepoint(x, y):
+                continue
             
-            if self.logical_surface.get_at_mapped((x, y)) == target_pen:
+            curr_p = self.logical_surface.get_at_mapped((x, y)) % num_pens
+            if curr_p not in boundary_pens:
                 rect = pygame.Rect(x, y, dx, dy)
-                pygame.draw.rect(self.logical_surface, pen, rect)
-                if x >= dx: queue.append((x-dx, y))
-                if x < self.logical_width - dx: queue.append((x+dx, y))
-                if y >= dy: queue.append((x, y-dy))
-                if y < self.logical_height - dy: queue.append((x, y+dy))
+                pygame.draw.rect(self.logical_surface, fill_pen, rect)
+                if x - dx >= bound_rect.left: queue.append((x - dx, y))
+                if x + dx < bound_rect.right: queue.append((x + dx, y))
+                if y - dy >= bound_rect.top: queue.append((x, y - dy))
+                if y + dy < bound_rect.bottom: queue.append((x, y + dy))
 
         self.logical_surface.set_clip(old_clip)
+
     def test(self, x, y):
+        self.move(x, y)
         sx, sy = self._cpc_to_screen(x, y)
+        clip_rect = getattr(self, 'graphics_clip_rect', None)
+        if clip_rect is not None and not clip_rect.collidepoint(sx, sy):
+            return self.graphics_paper
         if 0 <= sx < self.logical_width and 0 <= sy < self.logical_height:
             return self.logical_surface.get_at_mapped((sx, sy))
-        return 0
+        return self.graphics_paper
 
     def get_inkey_str(self):
         self.process_events()
@@ -1375,6 +1439,8 @@ class Display:
                                     self.streams[stream]["text_col"] = self.get_max_cols()
                                     self.streams[stream]["text_row"] -= 1
                                 self.update()
+                            elif hasattr(self, 'sound') and self.sound is not None:
+                                self.sound.play_sound(0x87, 90, 20, 11, 0, 0, 0, blocking=False)
                         elif event.unicode and ord(event.unicode) >= 32:
                             input_str += event.unicode
                             self.print_text(event.unicode, stream=stream)

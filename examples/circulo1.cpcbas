@@ -1,0 +1,8 @@
+10 CLS
+20 DEG
+30 MOVE 320+190, 200  ' Nos movemos al punto de inicio (ángulo 0)
+40 FOR a=1 TO 360
+50 DRAW 320+190*COS(a), 200+190*SIN(a) ' DRAW traza una línea desde el punto anterior
+60 NEXT
+70 MOVE 320,200
+80 FILL 3

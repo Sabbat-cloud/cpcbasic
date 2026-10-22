@@ -1,6 +1,7 @@
 import math
 import random
 import sys
+import time
 import pygame
 import ast
 from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, GotoStatement, 
@@ -16,7 +17,7 @@ from core.parser import (Program, PrintStatement, WriteStatement, LetStatement, 
                          DegStatement, RadStatement, EnvStatement, EntStatement,
                          MaskStatement, ZoneStatement, SpeedStatement, TagStatement, TagoffStatement,
                          FillStatement, EraseStatement, EveryStatement, AfterStatement, LetArrayStatement, PokeStatement,
-                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnBreakStatement, OnSqStatement, CallStatement, ReleaseStatement, OutStatement, WaitStatement, CursorStatement, PlotrStatement, WidthStatement, WindowSwapStatement, SwapStatement, AutoStatement, CatStatement, ChainStatement, DeleteStatement, EditStatement, MemoryStatement, MergeStatement, RenumStatement, SaveStatement, LoadStatement, KeyStatement, KeyDefStatement)
+                         RsxStatement, OnErrorStatement, ErrorStatement, ResumeStatement, OnBreakStatement, OnSqStatement, CallStatement, ReleaseStatement, OutStatement, WaitStatement, CursorStatement, PlotrStatement, WidthStatement, WindowSwapStatement, ListStatement, SwapStatement, AutoStatement, CatStatement, ChainStatement, DeleteStatement, EditStatement, MemoryStatement, MergeStatement, RenumStatement, SaveStatement, LoadStatement, KeyStatement, KeyDefStatement)
 from core.cpc_format import format_cpc_field, format_cpc_using
 from video.display import Display
 from audio.sound import SoundEngine
@@ -42,6 +43,9 @@ class Interpreter:
         if hasattr(self, 'while_stack'):
             self.while_stack = []
         self.timers = {0: None, 1: None, 2: None, 3: None}
+        self.sq_targets = {0: 0, 1: 0, 2: 0}
+        if hasattr(self, 'sound'):
+            self.sound.reset()
         self.data_values = []
         self.data_ptr = 0
         self.user_functions = {}
@@ -49,9 +53,18 @@ class Interpreter:
         self.interrupts_enabled = True
         self.angle_mode = 'RAD'
         self.tag_active = False
+        self.zone_width = 13
+        self.printer_width = 132
+        self.printer_pos = 1
+        self.file_out_pos = 1
         self.err_code = 0
         self.err_line = 0
         self.next_stmt_idx = 0
+        self.virtual_time_us = 0
+        self.frame_virtual_time_us = 0
+        self.time_offset = 0
+        self.last_sync_real_time = None
+        self.last_sync_virt_us = 0
         if hasattr(self, 'restore_statements'):
             del self.restore_statements
         if hasattr(self, 'display'):
@@ -73,7 +86,17 @@ class Interpreter:
         self.pc = None
         self.running = False
         self.display = Display(scale=scale)
+        self.display.interpreter = self
         self.sound = SoundEngine()
+        self.display.sound = self.sound
+        self.sq_targets = {0: 0, 1: 0, 2: 0}
+        self._ppi_port_a = 0
+        self._psg_selected_reg = 0
+        self.virtual_time_us = 0
+        self.frame_virtual_time_us = 0
+        self.time_offset = 0
+        self.last_sync_real_time = None
+        self.last_sync_virt_us = 0
         
         # Z80 Ghost Registers
         self.z80 = Z80Registers()
@@ -109,6 +132,9 @@ class Interpreter:
             0xBCB9: self.fw_sound_continue,
             0xBCBC: self.fw_sound_ampl_envelope,
             0xBCBF: self.fw_sound_tone_envelope,
+            0xBCC2: self.fw_sound_a_address,
+            0xBCC5: self.fw_sound_t_address,
+            0xBD34: self.fw_mc_sound_register,
             0xBD19: self.fw_mc_wait_flyback,
             0xBD1C: self.fw_mc_set_mode,
             0xBC05: self.fw_scr_set_offset,
@@ -129,6 +155,10 @@ class Interpreter:
         
         self.angle_mode = 'RAD'
         self.tag_active = False
+        self.zone_width = 13
+        self.printer_width = 132
+        self.printer_pos = 1
+        self.file_out_pos = 1
         
         self.err_code = 0
         self.err_line = 0
@@ -146,23 +176,23 @@ class Interpreter:
         # Funciones built-in del Amstrad BASIC para el evaluador
         self.builtins = {
             "__builtins__": {},
-            "SIN": lambda x: math.sin(math.radians(x) if self.angle_mode == 'DEG' else x),
-            "COS": lambda x: math.cos(math.radians(x) if self.angle_mode == 'DEG' else x),
-            "TAN": lambda x: math.tan(math.radians(x) if self.angle_mode == 'DEG' else x),
+            "SIN": self.builtin_sin,
+            "COS": self.builtin_cos,
+            "TAN": self.builtin_tan,
             "INT": math.floor,
             "ABS": abs,
             "RND": self.cpc_rnd,
             "PI": math.pi,
-            "TIME": lambda: int(pygame.time.get_ticks() / 3.33) if 'pygame' in sys.modules else 0,
+            "TIME": self.get_cpc_time,
             "XPOS": lambda *args: self.display.graphics_x,
             "YPOS": lambda *args: self.display.graphics_y,
-            "POS": lambda stream=0: self.display.get_pos(stream) if hasattr(self.display, 'get_pos') else (self.display.streams[int(stream)]['text_col'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
-            "VPOS": lambda stream=0: self.display.get_vpos(stream) if hasattr(self.display, 'get_vpos') else (self.display.streams[int(stream)]['text_row'] if hasattr(self, 'display') and hasattr(self.display, 'streams') and int(stream) in self.display.streams else 1),
+            "POS": lambda stream=0: self.get_stream_pos(stream),
+            "VPOS": lambda stream=0: self.get_stream_vpos(stream),
             "CHR_STR": lambda x: chr(self.cint(x) & 0xFF),
             "ASC": cpc_asc,
-            "SQR": math.sqrt,
-            "LOG": math.log,
-            "LOG10": math.log10,
+            "SQR": self.builtin_sqr,
+            "LOG": self.builtin_log,
+            "LOG10": self.builtin_log10,
             "HIMEM": lambda: 42597,
             "VAL": lambda x: float(x) if '.' in str(x) else int(x) if str(x).lstrip('-').isdigit() else 0,
             "RIGHT_STR": lambda s, n: s[-self.cint(n):] if self.cint(n) > 0 else "",
@@ -175,7 +205,7 @@ class Interpreter:
             "TESTR": lambda x, y: self.display.test(self.display.graphics_x + self.cint(x), self.display.graphics_y + self.cint(y)) if hasattr(self.display, 'test') else 0,
             "REMAIN": self.do_remain,
             "INKEY": lambda key: self.display.get_inkey_state(self.cint(key)),
-            "COPYCHR_STR": lambda stream: self.display.copychr(stream) if hasattr(self.display, 'copychr') else "",
+            "COPYCHR_STR": lambda stream=0: self.display.copychr(self.cint(stream)) if hasattr(self.display, 'copychr') else "",
             "CREAL": float,
             "CINT": self.cint,
             "CPC_IDIV": self.cpc_idiv,
@@ -190,7 +220,7 @@ class Interpreter:
             "UNT": lambda x: (self.cint(x) & 0xFFFF) - 65536 if (self.cint(x) & 0xFFFF) >= 32768 else (self.cint(x) & 0xFFFF),
             "LEFT_STR": lambda s, n: s[:self.cint(n)] if self.cint(n) > 0 else "",
             "UPPER_STR": lambda s: s.upper(),
-            "STR_STR": lambda x: f" {x}" if x >= 0 else str(x),
+            "STR_STR": lambda x: self.format_cpc_number(x, with_leading_space=True),
             "SPACE_STR": lambda n: " " * max(0, self.cint(n)),
             "STRING_STR": lambda n, c: (chr(self.cint(c) & 0xFF) if isinstance(c, (int, float)) else c[0]) * max(0, self.cint(n)),
             "HEX_STR": lambda x, w=None: hex(self.cint(x) & 0xFFFF)[2:].upper().zfill(self.cint(w)) if w else hex(self.cint(x) & 0xFFFF)[2:].upper(),
@@ -198,15 +228,254 @@ class Interpreter:
             "INSTR": lambda a, b, c=None: b.find(c, self.cint(a)-1) + 1 if c is not None else a.find(b) + 1,
             "PEEK": self.do_peek,
             "JOY": lambda joy_id: self.get_joy_state(self.cint(joy_id)),
-            "ATN": lambda x: math.degrees(math.atan(x)) if self.angle_mode == 'DEG' else math.atan(x),
+            "ATN": self.builtin_atn,
             "SGN": lambda x: 1 if x > 0 else (-1 if x < 0 else 0),
             "MIN": min,
-            "EXP": math.exp,
+            "EXP": self.builtin_exp,
             "DEC_STR": lambda x, fmt: format_cpc_field(x, str(fmt)) if isinstance(fmt, str) else str(x),
-            "SPC": lambda x: " " * max(0, self.cint(x)),
-            "TAB": lambda x: " " * max(0, self.cint(x) - self.display.streams[0]["text_col"]) if hasattr(self, 'display') and hasattr(self.display, 'streams') else " " * max(0, self.cint(x) - 1),
+            "SPC": lambda x: " " * (max(0, self.cint(x)) % (self.get_stream_width(0) or 256)),
+            "TAB": lambda x: " " * max(0, ((max(1, self.cint(x)) - 1) % (self.get_stream_width(0) or 256)) + 1 - self.get_stream_pos(0)),
             "EOF": self.check_eof
         }
+
+    def consume_time_us(self, us):
+        if getattr(self, 'speed', 'unlimited') != 'real':
+            return
+        self.virtual_time_us += us
+        self.frame_virtual_time_us += us
+        if self.frame_virtual_time_us >= 20000:
+            frames = int(self.frame_virtual_time_us // 20000)
+            self.frame_virtual_time_us %= 20000
+            self.sync_real_time(frames)
+
+    def sync_real_time(self, frames=1):
+        if hasattr(self, 'display'):
+            self.display.process_events()
+            self.display.update()
+        if hasattr(self, 'sound'):
+            self.sound.update_queues()
+
+        now = time.perf_counter()
+        if self.last_sync_real_time is None:
+            self.last_sync_real_time = now
+            self.last_sync_virt_us = self.virtual_time_us
+            return
+
+        target_elapsed = (self.virtual_time_us - self.last_sync_virt_us) / 1000000.0
+        actual_elapsed = now - self.last_sync_real_time
+        import os
+        if not os.environ.get('CPC_TEST_NO_SLEEP'):
+            delay = target_elapsed - actual_elapsed
+            if delay > 0.001:
+                time.sleep(delay)
+            elif delay < -0.1:
+                self.last_sync_real_time = time.perf_counter()
+                self.last_sync_virt_us = self.virtual_time_us
+
+    def get_cpc_time(self):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            ticks = int(self.virtual_time_us * 300 / 1000000.0)
+        else:
+            current_ms = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            ticks = int(current_ms * 0.3)
+        return self.time_offset + ticks
+
+    def set_cpc_time(self, val):
+        current_ticks = self.get_cpc_time() - self.time_offset
+        self.time_offset = self.cint(val) - current_ticks
+
+    def builtin_sin(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(11800)
+        rad = math.radians(x) if self.angle_mode == 'DEG' else x
+        return math.sin(rad)
+
+    def builtin_cos(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(11800)
+        rad = math.radians(x) if self.angle_mode == 'DEG' else x
+        return math.cos(rad)
+
+    def builtin_tan(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(18000)
+        rad = math.radians(x) if self.angle_mode == 'DEG' else x
+        return math.tan(rad)
+
+    def builtin_atn(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(16000)
+        res = math.atan(x)
+        return math.degrees(res) if self.angle_mode == 'DEG' else res
+
+    def builtin_sqr(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(12000)
+        return math.sqrt(x)
+
+    def builtin_log(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(12000)
+        return math.log(x)
+
+    def builtin_log10(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(13000)
+        return math.log10(x)
+
+    def builtin_exp(self, x):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(15000)
+        return math.exp(x)
+
+    def get_expr_cost(self, expr):
+        if isinstance(expr, Literal):
+            return 150
+        elif isinstance(expr, Variable):
+            return 250
+        elif isinstance(expr, RawExpression):
+            if hasattr(expr, '_cost_us'):
+                return expr._cost_us
+            cost = 0
+            tokens = expr.tokens
+            for i, t in enumerate(tokens):
+                if t.type == 'IDENTIFIER':
+                    if i + 1 < len(tokens) and tokens[i+1].value == '(':
+                        cost += 2200
+                    else:
+                        cost += 250
+                elif t.type in ('NUMBER', 'HEX_NUMBER', 'BIN_NUMBER'):
+                    cost += 150
+                elif t.type == 'STRING':
+                    cost += 200
+                elif t.type == 'SYMBOL':
+                    v = t.value
+                    if v == '^':
+                        cost += 18000
+                    elif v == '*':
+                        cost += 1400
+                    elif v in ('/', '\\'):
+                        cost += 2200
+                    elif v in ('+', '-'):
+                        cost += 250
+                    elif v in ('=', '<>', '<', '>', '<=', '>='):
+                        cost += 400
+                elif t.type == 'KEYWORD':
+                    kw = t.value.upper()
+                    if kw in ('AND', 'OR', 'XOR', 'NOT'):
+                        cost += 350
+                    elif kw == 'MOD':
+                        cost += 2200
+            expr._cost_us = cost
+            return cost
+        return 150
+
+    def get_statement_cost_us(self, stmt):
+        st = type(stmt).__name__
+        if st == 'PlotStatement':
+            return 2360
+        elif st == 'PlotrStatement':
+            return 2760
+        elif st == 'DrawStatement':
+            return 3500
+        elif st == 'DrawrStatement':
+            return 3900
+        elif st == 'PokeStatement':
+            return 1530
+        elif st == 'LetStatement':
+            return 500
+        elif st == 'LetArrayStatement':
+            return 1500
+        elif st == 'ForStatement':
+            return 1200
+        elif st == 'NextStatement':
+            return 607
+        elif st == 'LocateStatement':
+            return 1300
+        elif st == 'PrintStatement':
+            return 1200
+        elif st == 'ClsStatement':
+            return 18000
+        elif st == 'ClgStatement':
+            return 20000
+        elif st == 'ModeStatement':
+            return 35000
+        elif st == 'OriginStatement':
+            return 800
+        elif st in ('GosubStatement', 'ReturnStatement'):
+            return 1000
+        elif st == 'GotoStatement':
+            return 600
+        elif st == 'IfStatement':
+            return 500
+        elif st == 'DimStatement':
+            return 1500
+        elif st in ('EnvStatement', 'EntStatement', 'SoundStatement'):
+            return 2500
+        else:
+            return 600
+
+    def get_stream_pos(self, stream=0):
+        s = self.cint(stream)
+        if 0 <= s <= 7:
+            if hasattr(self, 'display') and hasattr(self.display, 'get_pos'):
+                return self.display.get_pos(s)
+            return 1
+        elif s == 8:
+            return getattr(self, 'printer_pos', 1)
+        elif s == 9:
+            return getattr(self, 'file_out_pos', 1)
+        return 1
+
+    def get_stream_vpos(self, stream=0):
+        s = self.cint(stream)
+        if 0 <= s <= 7:
+            if hasattr(self, 'display') and hasattr(self.display, 'get_vpos'):
+                return self.display.get_vpos(s)
+        return 1
+
+    def get_stream_width(self, stream=0):
+        s = self.cint(stream)
+        if 0 <= s <= 7:
+            if hasattr(self, 'display') and hasattr(self.display, 'get_text_window'):
+                left, right, _, _ = self.display.get_text_window(s)
+                return right - left + 1
+            return 40
+        elif s == 8:
+            pw = getattr(self, 'printer_width', 132)
+            return None if pw == 255 else pw
+        return None
+
+    def format_cpc_number(self, val, with_leading_space=True):
+        if isinstance(val, bool):
+            val = int(val)
+        is_neg = val < 0
+        abs_v = abs(val)
+        if isinstance(abs_v, int) or (isinstance(abs_v, float) and abs_v.is_integer() and abs_v < 1e9):
+            s = str(int(abs_v))
+        else:
+            s = f"{abs_v:.9g}".upper()
+        if is_neg:
+            return "-" + s
+        elif with_leading_space:
+            return " " + s
+        return s
+
+    def _count_printable_prefix(self, text):
+        count = 0
+        i = 0
+        n = len(text)
+        while i < n:
+            code = ord(text[i])
+            if code < 32:
+                if code == 1:
+                    count += 1
+                    i += 2
+                    continue
+                break
+            count += 1
+            i += 1
+        return count
         
     def cpc_rnd(self, x=None):
         if x is not None:
@@ -383,13 +652,14 @@ class Interpreter:
     def function_sq(self, channel_arg):
         """Función BASIC SQ(channel): devuelve estado de la cola y desarma eventos ON SQ."""
         ch = self.cint(channel_arg)
-        if hasattr(self, 'sq_timers') and ch in self.sq_timers:
-            del self.sq_timers[ch]
-        return self.sound.get_sq_status(ch)
+        if ch not in (1, 2, 4):
+            self.trigger_error(5, self.pc)
+        return self.sound.get_sq_status(ch, disarm=True)
 
     def fw_sound_reset(self):
         """SOUND RESET (&BCA7): Silencia todos los canales y limpia las colas."""
         self.sound.reset()
+        self.sq_targets = {0: 0, 1: 0, 2: 0}
         if hasattr(self, 'sq_timers'):
             self.sq_timers.clear()
 
@@ -411,12 +681,6 @@ class Interpreter:
         # Convertir duración a entero con signo de 16 bits
         duration = self._to_signed16(duration)
         
-        # Desarmar interrupciones ON SQ en los canales de destino (sound.asm línea 352)
-        if hasattr(self, 'sq_timers'):
-            for ch_bit in (1, 2, 4):
-                if (status & ch_bit) and ch_bit in self.sq_timers:
-                    del self.sq_timers[ch_bit]
-                    
         ok = self.sound.play_sound(status, period, duration, volume, env, ent, noise, blocking=False)
         if ok:
             self.z80.F |= 1   # Carry true
@@ -426,21 +690,14 @@ class Interpreter:
     def fw_sound_check(self):
         """SOUND CHECK (&BCAD): Comprueba el estado de la cola del canal indicado en A."""
         chan_mask = self.z80.A
-        status = self.sound.get_sq_status(chan_mask)
+        status = self.sound.get_sq_status(chan_mask, disarm=True)
         self.z80.A = status
-        # Desarmar eventos ON SQ para este canal (sound.asm línea 517)
-        if hasattr(self, 'sq_timers'):
-            for ch_bit in (1, 2, 4):
-                if (chan_mask & ch_bit) and ch_bit in self.sq_timers:
-                    del self.sq_timers[ch_bit]
 
     def fw_sound_arm_event(self):
         """SOUND ARM EVENT (&BCB0): Arma evento cuando hay espacio en la cola del canal en A."""
         chan_mask = self.z80.A
-        status = self.sound.get_sq_status(chan_mask)
-        # Si la cola ya tiene espacio, el evento se ejecuta de inmediato (sound.asm línea 560)
-        # En emulación, la llamada directa gestiona el registro de eventos si procede
-        return status
+        self.sound.arm_sq_event(chan_mask)
+        return self.sound.get_sq_status(chan_mask, disarm=False)
 
     def fw_sound_release(self):
         """SOUND RELEASE (&BCB3): Libera canales en Hold según máscara de canales en A."""
@@ -463,17 +720,115 @@ class Interpreter:
         """SOUND AMPL ENVELOPE (&BCBC): Define envolvente de volumen desde bloque en HL."""
         env_no = self.z80.A
         addr = self.z80.HL
-        if addr + 16 <= 65536:
+        if 1 <= env_no <= 15 and addr + 16 <= 65536:
             block = bytes(self.ram[addr:addr+16])
             self.sound.set_env_from_ram(env_no, block)
+            dest = 0xB2A6 + 16 * env_no
+            self.ram[dest:dest+16] = block
+            self.z80.HL = (addr + 16) & 0xFFFF
+            self.z80.F |= 1
+        else:
+            self.z80.F &= ~1
 
     def fw_sound_tone_envelope(self):
         """SOUND TONE ENVELOPE (&BCBF): Define envolvente de tono desde bloque en HL."""
         ent_no = self.z80.A
         addr = self.z80.HL
-        if addr + 16 <= 65536:
+        if 1 <= ent_no <= 15 and addr + 16 <= 65536:
             block = bytes(self.ram[addr:addr+16])
             self.sound.set_ent_from_ram(ent_no, block)
+            dest = 0xB396 + 16 * ent_no
+            self.ram[dest:dest+16] = block
+            self.z80.HL = (addr + 16) & 0xFFFF
+            self.z80.F |= 1
+        else:
+            self.z80.F &= ~1
+
+    def fw_sound_a_address(self):
+        """SOUND A ADDRESS (&BCC2): Devuelve en HL la dirección de la envolvente de amplitud A y BC=16."""
+        env_no = self.z80.A
+        if 1 <= env_no <= 15:
+            self.z80.HL = 0xB2A6 + 16 * env_no
+            self.z80.BC = 16
+            self.z80.F |= 1
+        else:
+            self.z80.F &= ~1
+
+    def fw_sound_t_address(self):
+        """SOUND T ADDRESS (&BCC5): Devuelve en HL la dirección de la envolvente de tono A y BC=16."""
+        ent_no = self.z80.A
+        if 1 <= ent_no <= 15:
+            self.z80.HL = 0xB396 + 16 * ent_no
+            self.z80.BC = 16
+            self.z80.F |= 1
+        else:
+            self.z80.F &= ~1
+
+    def fw_mc_sound_register(self):
+        """MC SOUND REGISTER (&BD34): Escribe el valor C en el registro A del AY-3-8912."""
+        self.sound.write_psg_register(self.z80.A, self.z80.C)
+
+    def _sync_env_ram(self, env_no):
+        """Sincroniza la envolvente de volumen env_no en el área de RAM del firmware (&ADA2 y &B2A6+16*N)."""
+        if not (1 <= env_no <= 15):
+            return
+        grouped = self.sound.envelopes_vol.get(env_no, [])
+        block = bytearray(16)
+        block[0] = len(grouped) & 0x7F
+        for i, sec in enumerate(grouped[:5]):
+            base = 1 + i * 3
+            s0, s1, s2 = int(sec[0]), int(sec[1]), int(sec[2])
+            if s0 == -1:
+                block[base] = 0x80 | (s1 & 0x0F)
+                block[base + 1] = s2 & 0xFF
+                block[base + 2] = (s2 >> 8) & 0xFF
+            else:
+                block[base] = s0 & 0x7F
+                block[base + 1] = s1 & 0xFF
+                block[base + 2] = s2 & 0xFF
+        self.ram[0xADA2:0xADB2] = block
+        dest = 0xB2A6 + 16 * env_no
+        self.ram[dest:dest + 16] = block
+
+    def _sync_ent_ram(self, ent_no):
+        """Sincroniza la envolvente de tono ent_no en el área de RAM del firmware (&ADA2 y &B396+16*N)."""
+        actual_no = abs(int(ent_no))
+        if not (1 <= actual_no <= 15):
+            return
+        ent_data = self.sound.envelopes_tone.get(actual_no, {})
+        grouped = ent_data.get('sections', []) if isinstance(ent_data, dict) else ent_data
+        repeat = ent_data.get('repeat', False) if isinstance(ent_data, dict) else (ent_no < 0)
+        block = bytearray(16)
+        block[0] = (len(grouped) & 0x7F) | (0x80 if repeat else 0)
+        for i, sec in enumerate(grouped[:5]):
+            base = 1 + i * 3
+            s0, s1, s2 = int(sec[0]), int(sec[1]), int(sec[2])
+            if s0 == -1:
+                block[base] = 0xF0 + ((s1 >> 8) & 0x0F)
+                block[base + 1] = s1 & 0xFF
+                block[base + 2] = s2 & 0xFF
+            else:
+                block[base] = s0 & 0xFF
+                block[base + 1] = s1 & 0xFF
+                block[base + 2] = s2 & 0xFF
+        self.ram[0xADA2:0xADB2] = block
+        dest = 0xB396 + 16 * actual_no
+        self.ram[dest:dest + 16] = block
+
+    def _has_pending_interrupt(self):
+        if hasattr(self, 'display') and getattr(self.display, 'esc_pressed', False):
+            return True
+        if not self.interrupts_enabled:
+            return False
+        for c_id in range(3):
+            if self.sound.sq_events_pending.get(c_id, False) and self.sq_targets.get(c_id, 0) > 0:
+                return True
+        current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+        for t_id in range(4):
+            t_info = self.timers.get(t_id)
+            if t_info and current_time >= t_info['next_trigger']:
+                return True
+        return False
         
     def fw_mc_wait_flyback(self):
         current_time = pygame.time.get_ticks()
@@ -894,6 +1249,8 @@ class Interpreter:
             else: return 0.0
 
     def evaluate(self, expr):
+        if getattr(self, 'speed', 'unlimited') == 'real':
+            self.consume_time_us(self.get_expr_cost(expr))
         if isinstance(expr, Literal):
             if expr.type == 'NUMBER':
                 # very basic float/int distinction
@@ -1099,6 +1456,11 @@ class Interpreter:
         self.collect_data()
         self.pc = self.line_numbers[0]
         self.running = True
+        self.virtual_time_us = 0
+        self.frame_virtual_time_us = 0
+        self.time_offset = 0
+        self.last_sync_real_time = time.perf_counter()
+        self.last_sync_virt_us = 0
         if hasattr(self, 'display'):
             import pygame
             if pygame.display.get_surface() is None:
@@ -1119,7 +1481,7 @@ class Interpreter:
                 self.display.quit_requested = False
                 break
             is_real_speed = getattr(self, 'speed', 'unlimited') == 'real'
-            current_time = pygame.time.get_ticks() if 'pygame' in sys.modules else 0
+            current_time = int(self.virtual_time_us // 1000) if is_real_speed else (pygame.time.get_ticks() if 'pygame' in sys.modules else 0)
             self.last_time = current_time
 
             # -- Keyboard Interrupt Check (ON BREAK) --
@@ -1146,10 +1508,11 @@ class Interpreter:
             interrupt_triggered = False
             self.sound.update_queues()
             if self.interrupts_enabled:
-                if hasattr(self, 'sq_timers'):
-                    for channel, target in list(self.sq_timers.items()):
-                        status = self.sound.get_sq_status(channel)
-                        if (status & 7) > 0:
+                for c_id in range(3):
+                    if self.sound.sq_events_pending.get(c_id, False):
+                        self.sound.sq_events_pending[c_id] = False
+                        target = self.sq_targets.get(c_id, 0)
+                        if target > 0 and target in self.program.lines:
                             saved_restore = getattr(self, 'restore_statements', None)
                             if hasattr(self, 'restore_statements'):
                                 del self.restore_statements
@@ -1157,7 +1520,6 @@ class Interpreter:
                             self.next_stmt_idx = 0
                             self.pc = target
                             self.interrupts_enabled = False
-                            del self.sq_timers[channel]
                             interrupt_triggered = True
                             break
                             
@@ -1216,15 +1578,12 @@ class Interpreter:
 
                     s_type = type(stmt).__name__
                     has_active_timer = any(t is not None for t in self.timers.values())
-                    if is_real_speed or (has_active_timer and s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement')):
+                    if is_real_speed:
+                        self.consume_time_us(self.get_statement_cost_us(stmt))
+                    elif has_active_timer and s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement'):
                         cost = 1
                         if s_type in ('DrawStatement', 'DrawrStatement', 'PlotStatement', 'PlotrStatement', 'ClsStatement', 'ClgStatement', 'FillStatement', 'SoundStatement'):
                             cost = 9
-                        elif s_type in ('PrintStatement', 'WriteStatement'):
-                            cost = 4
-                        elif s_type == 'LocateStatement':
-                            cost = 2
-                        
                         self.stmts_this_frame += cost
                         if self.stmts_this_frame >= statements_limit:
                             if hasattr(self, 'display'):
@@ -1248,8 +1607,40 @@ class Interpreter:
                         current_vals_for_using = []
 
                         def print_chunk(chunk):
+                            if not chunk:
+                                return
+                            if stream == 8:
+                                for ch in chunk:
+                                    if ch in ('\r', '\n'):
+                                        self.printer_pos = 1
+                                    elif ord(ch) >= 32:
+                                        self.printer_pos = getattr(self, 'printer_pos', 1) + 1
+                            elif stream == 9:
+                                for ch in chunk:
+                                    if ch in ('\r', '\n'):
+                                        self.file_out_pos = 1
+                                    elif ord(ch) >= 32:
+                                        self.file_out_pos = getattr(self, 'file_out_pos', 1) + 1
                             if stream != 9 and hasattr(self, 'display'):
                                 self.display.print_text(chunk, target_stream)
+                                if is_real_speed:
+                                    mode = getattr(self.display, 'mode', 1)
+                                    char_cost = 3300 if mode == 0 else (2800 if mode == 1 else 900)
+                                    for ch in chunk:
+                                        if ch in ('\r', '\n'):
+                                            self.consume_time_us(600)
+                                        else:
+                                            self.consume_time_us(char_cost)
+
+                        def poss_validate_xpos(required_chars):
+                            w = self.get_stream_width(stream)
+                            if w is not None and w > 0:
+                                col = self.get_stream_pos(stream)
+                                if col > 1 and (col - 1) + required_chars > w:
+                                    out.append("\n")
+                                    print_chunk("\r\n")
+                                    return True
+                            return False
 
                         def flush_using():
                             if current_using_fmt is not None and current_vals_for_using:
@@ -1265,27 +1656,61 @@ class Interpreter:
                                 current_using_fmt = expr.value
                                 continue
                             elif isinstance(expr, Literal) and expr.type == 'SEPARATOR':
-                                if expr.value == ';':
+                                if current_using_fmt is not None:
+                                    newline = False
+                                elif expr.value == ';':
                                     newline = False
                                 elif expr.value == ',':
-                                    flush_using()
-                                    out.append('\t')
-                                    print_chunk('\t')
+                                    z = getattr(self, 'zone_width', 13)
+                                    col = self.get_stream_pos(stream)
+                                    spaces = z - ((col - 1) % z)
+                                    if not poss_validate_xpos(spaces + z):
+                                        sp_str = " " * spaces
+                                        out.append(sp_str)
+                                        print_chunk(sp_str)
                                     newline = False
+                            elif isinstance(expr, Literal) and expr.type == 'SPC':
+                                flush_using()
+                                current_using_fmt = None
+                                n = max(0, self.cint(self.evaluate(expr.value)))
+                                w = self.get_stream_width(stream)
+                                if w is not None and w > 0:
+                                    n = n % w
+                                sp_str = " " * n
+                                out.append(sp_str)
+                                print_chunk(sp_str)
+                                newline = False
+                            elif isinstance(expr, Literal) and expr.type == 'TAB':
+                                flush_using()
+                                current_using_fmt = None
+                                n = self.cint(self.evaluate(expr.value)) - 1
+                                if n < 0:
+                                    n = 0
+                                w = self.get_stream_width(stream)
+                                if w is not None and w > 0:
+                                    n = n % w
+                                target_col = n + 1
+                                curr_col = self.get_stream_pos(stream)
+                                if target_col < curr_col:
+                                    sp_str = " " * (target_col - 1)
+                                    out.append("\n" + sp_str)
+                                    print_chunk("\r\n" + sp_str)
+                                else:
+                                    sp_str = " " * (target_col - curr_col)
+                                    out.append(sp_str)
+                                    print_chunk(sp_str)
+                                newline = False
                             else:
                                 evaluated = self.evaluate(expr)
                                 if current_using_fmt is not None:
                                     current_vals_for_using.append(evaluated)
                                 else:
-                                    if isinstance(evaluated, float) and evaluated.is_integer():
-                                        val = str(int(evaluated))
+                                    if isinstance(evaluated, (int, float)):
+                                        val = self.format_cpc_number(evaluated, with_leading_space=True) + " "
+                                        poss_validate_xpos(len(val))
                                     else:
                                         val = str(evaluated)
-                                    if isinstance(evaluated, (int, float)):
-                                        if evaluated >= 0:
-                                            val = " " + val + " "
-                                        else:
-                                            val = val + " "
+                                        poss_validate_xpos(self._count_printable_prefix(val))
                                     out.append(val)
                                     print_chunk(val)
                                 newline = True
@@ -1308,13 +1733,14 @@ class Interpreter:
                             if isinstance(val, str):
                                 out.append(f'"{val}"')
                             else:
-                                out.append(str(val))
+                                out.append(self.format_cpc_number(val, with_leading_space=False))
                         out_str = ",".join(out)
                         stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        target_stream = 0 if stream == 8 else stream
                         if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
                             self.file_out[9].write(out_str + "\n")
                         else:
-                            self.display.print_text(out_str + "\r\n", stream)
+                            self.display.print_text(out_str + "\r\n", target_stream)
 
                     elif isinstance(stmt, LocateStatement):
                         col = self.cint(self.evaluate(stmt.col))
@@ -1378,17 +1804,30 @@ class Interpreter:
                         self.angle_mode = 'RAD'
 
                     elif isinstance(stmt, TagStatement):
-                        self.tag_active = True
-                        if hasattr(self.display, 'tag_active'):
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        if stream == 0:
+                            self.tag_active = True
+                        if hasattr(self.display, 'set_tag'):
+                            self.display.set_tag(True, stream)
+                        elif hasattr(self.display, 'tag_active') and stream == 0:
                             self.display.tag_active = True
 
                     elif isinstance(stmt, TagoffStatement):
-                        self.tag_active = False
-                        if hasattr(self.display, 'tag_active'):
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        if stream == 0:
+                            self.tag_active = False
+                        if hasattr(self.display, 'set_tag'):
+                            self.display.set_tag(False, stream)
+                        elif hasattr(self.display, 'tag_active') and stream == 0:
                             self.display.tag_active = False
 
                     elif isinstance(stmt, ZoneStatement):
-                        pass # Stubbed to prevent execution errors
+                        z = self.cint(self.evaluate(stmt.width))
+                        if 1 <= z <= 255:
+                            self.zone_width = z
+                        else:
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
 
                     elif isinstance(stmt, MaskStatement):
                         if stmt.mask is not None:
@@ -1459,6 +1898,8 @@ class Interpreter:
                         val = self.evaluate(stmt.expr)
                         if stmt.identifier.startswith('_REG_'):
                             setattr(self.z80, stmt.identifier[5:], self.cint(val))
+                        elif stmt.identifier == 'TIME':
+                            self.set_cpc_time(val)
                         else:
                             self.variables[stmt.identifier] = self.typecast(stmt.identifier, val)
                     
@@ -1514,6 +1955,12 @@ class Interpreter:
                             else:
                                 loop_pc, loop_idx = loop_target, 0
                             if loop_pc == self.pc:
+                                self.sound.update_queues()
+                                if self._has_pending_interrupt():
+                                    next_pc = loop_pc
+                                    self.next_stmt_idx = loop_idx
+                                    self.restore_statements = statements
+                                    break
                                 stmt_idx = loop_idx
                             else:
                                 next_pc = loop_pc
@@ -1545,15 +1992,26 @@ class Interpreter:
                     
                     elif isinstance(stmt, OnSqStatement):
                         channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel is not None else 1
+                        if channel not in (1, 2, 4):
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
                         target_line = self.cint(self.evaluate(stmt.line_number))
-                        if not hasattr(self, 'sq_timers'):
-                            self.sq_timers = {}
+                        c_id = 0 if (channel & 1) else (1 if (channel & 2) else 2)
                         if target_line == 0:
-                            if channel in self.sq_timers:
-                                del self.sq_timers[channel]
+                            self.sq_targets[c_id] = 0
+                            self.sound.sq_events_armed[c_id] = False
+                            self.sound.sq_events_pending[c_id] = False
                         else:
-                            if channel in (1, 2, 4):
-                                self.sq_timers[channel] = target_line
+                            if target_line not in self.program.lines:
+                                next_pc = self.trigger_error(8, self.pc)
+                                break
+                            self.sq_targets[c_id] = target_line
+                            self.sound.arm_sq_event(channel)
+                            if self.interrupts_enabled and self.sound.sq_events_pending.get(c_id, False) and stmt_idx < len(statements):
+                                next_pc = self.pc
+                                self.next_stmt_idx = stmt_idx
+                                self.restore_statements = statements
+                                break
 
                     elif isinstance(stmt, ErrorStatement):
                         code = self.cint(self.evaluate(stmt.code))
@@ -1669,10 +2127,17 @@ class Interpreter:
                         self.display.set_mode(mode)
                     
                     elif isinstance(stmt, OutStatement):
-                        port = int(self.evaluate(stmt.port))
-                        value = int(self.evaluate(stmt.value))
-                        # CPC hardware out stub
-                        pass
+                        port = self.cint(self.evaluate(stmt.port)) & 0xFFFF
+                        value = self.cint(self.evaluate(stmt.value)) & 0xFF
+                        # Soporte de acceso directo al PSG AY-3-8912 vía PPI 8255 (&F4xx Puerto A, &F6xx Puerto C)
+                        if (port & 0xFF00) == 0xF400:
+                            self._ppi_port_a = value
+                        elif (port & 0xFF00) == 0xF600:
+                            bdir_bc1 = (value >> 6) & 0x03
+                            if bdir_bc1 == 0x03:
+                                self._psg_selected_reg = self._ppi_port_a & 0x0F
+                            elif bdir_bc1 == 0x02:
+                                self.sound.write_psg_register(getattr(self, '_psg_selected_reg', 0), self._ppi_port_a)
 
                     elif isinstance(stmt, WaitStatement):
                         port = int(self.evaluate(stmt.port))
@@ -1687,25 +2152,38 @@ class Interpreter:
                         if hasattr(self.display, 'set_cursor'):
                             self.display.set_cursor(s1, s2, stream)
 
-                    elif isinstance(stmt, PlotrStatement):
-                        x = int(self.evaluate(stmt.x))
-                        y = int(self.evaluate(stmt.y))
-                        pen = int(self.evaluate(stmt.pen)) if getattr(stmt, 'pen', None) is not None else None
-                        curr_x = getattr(self.display, 'graphics_x', 0)
-                        curr_y = getattr(self.display, 'graphics_y', 0)
-                        self.display.plot(curr_x + x, curr_y + y, pen)
-
                     elif isinstance(stmt, WidthStatement):
-                        w = int(self.evaluate(stmt.width))
-                        # stub width
+                        w = self.cint(self.evaluate(stmt.width))
+                        if 1 <= w <= 255:
+                            self.printer_width = w
+                        else:
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
 
                     elif isinstance(stmt, WindowSwapStatement):
-                        s1 = int(self.evaluate(stmt.stream1))
-                        s2 = int(self.evaluate(stmt.stream2))
+                        s1 = self.cint(self.evaluate(stmt.stream1))
+                        s2 = self.cint(self.evaluate(stmt.stream2))
+                        if not (0 <= s1 <= 7 and 0 <= s2 <= 7):
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
                         if hasattr(self.display, 'streams'):
                             tmp = self.display.streams.get(s1, {})
                             self.display.streams[s1] = self.display.streams.get(s2, {})
                             self.display.streams[s2] = tmp
+
+                    elif isinstance(stmt, ListStatement):
+                        stream = self.cint(self.evaluate(stmt.stream)) if getattr(stmt, 'stream', None) is not None else 0
+                        target_stream = 0 if stream == 8 else stream
+                        s_line = self.cint(self.evaluate(stmt.start_line)) if getattr(stmt, 'start_line', None) is not None else 0
+                        e_line = self.cint(self.evaluate(stmt.end_line)) if getattr(stmt, 'end_line', None) is not None else 65535
+                        source_lines = getattr(self.program, 'source_lines', {})
+                        for ln in self.line_numbers:
+                            if s_line <= ln <= e_line:
+                                line_txt = source_lines.get(ln, str(ln))
+                                if stream == 9 and hasattr(self, 'file_out') and 9 in self.file_out:
+                                    self.file_out[9].write(line_txt + "\n")
+                                elif hasattr(self, 'display'):
+                                    self.display.print_text(line_txt + "\r\n", target_stream)
 
                     elif isinstance(stmt, AutoStatement):
                         line_num = int(self.evaluate(stmt.line_number)) if getattr(stmt, 'line_number', None) else 10
@@ -1832,7 +2310,10 @@ class Interpreter:
                     elif isinstance(stmt, PlotStatement):
                         x = self.cint(self.evaluate(stmt.x))
                         y = self.cint(self.evaluate(stmt.y))
-                        pen = self.cint(self.evaluate(stmt.pen)) if stmt.pen else None
+                        pen = None
+                        if stmt.pen is not None:
+                            pen = self.cint(self.evaluate(stmt.pen))
+                            self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
                             mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
@@ -1841,7 +2322,10 @@ class Interpreter:
                     elif isinstance(stmt, PlotrStatement):
                         x = self.cint(self.evaluate(stmt.x))
                         y = self.cint(self.evaluate(stmt.y))
-                        pen = self.cint(self.evaluate(stmt.pen)) if stmt.pen else None
+                        pen = None
+                        if stmt.pen is not None:
+                            pen = self.cint(self.evaluate(stmt.pen))
+                            self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
                             mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
@@ -1853,24 +2337,19 @@ class Interpreter:
                         x = self.cint(self.evaluate(stmt.x))
                         y = self.cint(self.evaluate(stmt.y))
                         pen = None
-                        if stmt.pen:
+                        if stmt.pen is not None:
                             pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
                             mode = self.cint(self.evaluate(stmt.mode))
                             self.display.set_graphics_write_mode(mode)
                         self.display.draw(x, y, pen)
-                        if getattr(self.display, 'graphics_write_mode', 0) in (1, 3) and 'pygame' in sys.modules:
-                            self.display.process_events()
-                            self.display.update()
-                            self.last_update = pygame.time.get_ticks()
-                            pygame.time.wait(20)
 
                     elif isinstance(stmt, DrawrStatement):
                         x = self.cint(self.evaluate(stmt.x))
                         y = self.cint(self.evaluate(stmt.y))
                         pen = None
-                        if stmt.pen:
+                        if stmt.pen is not None:
                             pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if getattr(stmt, 'mode', None) is not None:
@@ -1880,16 +2359,11 @@ class Interpreter:
                         curr_x = getattr(self.display, 'graphics_x', 0)
                         curr_y = getattr(self.display, 'graphics_y', 0)
                         self.display.draw(curr_x + x, curr_y + y, pen)
-                        if getattr(self.display, 'graphics_write_mode', 0) in (1, 3) and 'pygame' in sys.modules:
-                            self.display.process_events()
-                            self.display.update()
-                            self.last_update = pygame.time.get_ticks()
-                            pygame.time.wait(20)
 
                     elif isinstance(stmt, MoveStatement):
                         x = self.cint(self.evaluate(stmt.x))
                         y = self.cint(self.evaluate(stmt.y))
-                        if stmt.pen:
+                        if stmt.pen is not None:
                             pen = self.cint(self.evaluate(stmt.pen))
                             self.display.set_graphics_pen(pen)
                         if stmt.mode is not None:
@@ -2093,13 +2567,21 @@ class Interpreter:
 
                     elif isinstance(stmt, EnvStatement):
                         env_no = self.cint(self.evaluate(stmt.env_no))
+                        if not (1 <= env_no <= 15):
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
                         sections = [self.cint(self.evaluate(s)) for s in stmt.sections]
                         self.sound.set_env(env_no, sections)
+                        self._sync_env_ram(env_no)
                     
                     elif isinstance(stmt, EntStatement):
                         ent_no = self.cint(self.evaluate(stmt.ent_no))
+                        if ent_no == 0 or abs(ent_no) > 15:
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
                         sections = [self.cint(self.evaluate(s)) for s in stmt.sections]
                         self.sound.set_ent(ent_no, sections)
+                        self._sync_ent_ram(ent_no)
 
                     elif isinstance(stmt, SoundStatement):
                         channel = self.cint(self.evaluate(stmt.channel)) if stmt.channel is not None else 1
@@ -2109,17 +2591,45 @@ class Interpreter:
                         env = self.cint(self.evaluate(stmt.env)) if stmt.env is not None else 0
                         ent = self.cint(self.evaluate(stmt.ent)) if stmt.ent is not None else 0
                         noise = self.cint(self.evaluate(stmt.noise)) if stmt.noise is not None else 0
-                        
-                        # Desarmar interrupciones ON SQ en los canales de destino (sound.asm línea 352)
-                        if hasattr(self, 'sq_timers'):
-                            for ch_bit in (1, 2, 4):
-                                if (channel & ch_bit) and ch_bit in self.sq_timers:
-                                    del self.sq_timers[ch_bit]
-                                    
-                        self.sound.play_sound(channel, period, duration, volume, env, ent, noise)
+
+                        # Validaciones de rangos de Sound.asm (ROM BASIC 1.1)
+                        if not (1 <= channel <= 255) or not (0 <= period <= 4095) or not (0 <= env <= 15) or not (-15 <= ent <= 15) or not (0 <= noise <= 31) or volume < 0 or volume > 15:
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
+
+                        # Espejo del bloque de 9 bytes de parámetros SOUND en RAM (&AD99..&ADA1)
+                        dur_u16 = duration & 0xFFFF
+                        self.ram[0xAD99] = channel & 0xFF
+                        self.ram[0xAD9A] = env & 0xFF
+                        self.ram[0xAD9B] = abs(ent) & 0xFF
+                        self.ram[0xAD9C] = period & 0xFF
+                        self.ram[0xAD9D] = (period >> 8) & 0x0F
+                        self.ram[0xAD9E] = noise & 0x1F
+                        self.ram[0xAD9F] = (volume & 0x0F) | 0x80
+                        self.ram[0xADA0] = dur_u16 & 0xFF
+                        self.ram[0xADA1] = (dur_u16 >> 8) & 0xFF
+
+                        # Sound.asm líneas 48-53: si la cola está llena (Carry Clear), re-ejecutar la sentencia
+                        # tras procesar eventos síncronos (AFTER/EVERY/ON SQ/ON BREAK) para evitar bloqueo
+                        ok = self.sound.play_sound(channel, period, duration, volume, env, ent, noise, blocking=False)
+                        if not ok:
+                            if hasattr(self, 'display'):
+                                self.display.process_events()
+                                if getattr(self.display, 'quit_requested', False):
+                                    self.running = False
+                                    break
+                            if 'pygame' in sys.modules:
+                                pygame.time.wait(5)
+                            next_pc = self.pc
+                            self.next_stmt_idx = stmt_idx - 1
+                            self.restore_statements = statements
+                            break
                     
                     elif isinstance(stmt, ReleaseStatement):
                         channels = self.cint(self.evaluate(stmt.channels))
+                        if not (1 <= channels <= 7):
+                            next_pc = self.trigger_error(5, self.pc)
+                            break
                         self.sound.release_channels(channels)
                     
                     elif isinstance(stmt, IfStatement):
@@ -2355,6 +2865,14 @@ class Interpreter:
                         self.ram[addr] = val
                         if addr >= 0xC000:
                             self.display.poke_video_ram(addr, val)
+                        elif 0xB2B6 <= addr < 0xB3A6:
+                            env_no = (addr - 0xB2A6) // 16
+                            base = 0xB2A6 + 16 * env_no
+                            self.sound.set_env_from_ram(env_no, bytes(self.ram[base:base + 16]))
+                        elif 0xB3A6 <= addr < 0xB496:
+                            ent_no = (addr - 0xB396) // 16
+                            base = 0xB396 + 16 * ent_no
+                            self.sound.set_ent_from_ram(ent_no, bytes(self.ram[base:base + 16]))
                         
                     elif isinstance(stmt, NextStatement):
                         identifiers = getattr(stmt, 'identifiers', [stmt.identifier])
@@ -2398,6 +2916,12 @@ class Interpreter:
                             else:
                                 jump_pc, jump_idx = next_jump, 0
                             if jump_pc == self.pc:
+                                self.sound.update_queues()
+                                if self._has_pending_interrupt():
+                                    next_pc = jump_pc
+                                    self.next_stmt_idx = jump_idx
+                                    self.restore_statements = statements
+                                    break
                                 stmt_idx = jump_idx
                             else:
                                 next_pc = jump_pc
